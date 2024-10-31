@@ -22,19 +22,8 @@ movie_df, channel_a_schedule_df, channel_0_schedule_df = import_data()
 print(channel_a_schedule_df.head())
 
 
-def create_licence_fee_vector(movie_df):
-    base_fee = 10_000
-    profit_margin = 0.2
-    budget_factor = 0.002
-    box_office_revenue_factor = 0.001
-    license_fee = (base_fee + (budget_factor * movie_df['budget'])
-               + (box_office_revenue_factor * movie_df['revenue'])
-               ) * (1. + profit_margin)
 
-    movie_df['license_fee'] = license_fee
-    return movie_df
 
-movie_df = create_licence_fee_vector(movie_df)
 
 ######## --------------- ###################
 # Declare
