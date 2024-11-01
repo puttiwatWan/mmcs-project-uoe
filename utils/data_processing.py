@@ -32,9 +32,14 @@ def estimated_view_count(demographic_baseline,
 
         demographic_expected_view_count = estimate_view_count_calculation(demographic_baseline[demographic], demographic_popularity[demographic])
         total_view_count = total_view_count + demographic_expected_view_count
-        demographic_view_list.appends(demographic_expected_view_count)
+        demographic_view_list.append(demographic_expected_view_count)
     
     return demographic_view_list, total_view_count
+
+
+def ad_slot_price(license_fee, n_ad_breaks):
+
+    return license_fee/ n_ad_breaks
 
 
 def process_table(movie_df):
@@ -43,9 +48,9 @@ def process_table(movie_df):
 
     demographic_popularity_list = []
     for demographic in DEMOGRAPHIC_LIST:
-        demographic_popularity_list.appends(movie_df[f'{demographic}_popularity'])
+        demographic_popularity_list.append(movie_df[f'{demographic}_scaled_popularity'])
 
-    baseline = 0
+    baseline = [0, 0, 0]
     demographic_view_list, total_view_count = estimated_view_count(baseline, demographic_popularity_list)
 
     demo = 0
@@ -54,6 +59,9 @@ def process_table(movie_df):
         demo = demo + 1
 
     movie_df[f'total_expected_view_count'] = total_view_count
+
+    movie_df['ad_slot_price'] = ad_slot_price(movie_df['license_fee'], 
+                             movie_df['n_ad_breaks'])
 
     return movie_df
         

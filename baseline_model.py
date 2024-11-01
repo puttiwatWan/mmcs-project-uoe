@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import xpress as xp
 from advert_conversion_rates import *
+from utils.data_processing import process_table
 
 
 def import_data():
@@ -19,34 +20,32 @@ def import_data():
 
 movie_df, channel_a_schedule_df, channel_0_schedule_df = import_data()
 
-print(channel_a_schedule_df.head())
 
-
-
+movie_df = process_table(movie_df)
 
 
 ######## --------------- ###################
 # Declare
-movie_var = [xp.var (vartype = xp.binary) for i in range (len(movie_df))]
+# movie_var = [xp.var (vartype = xp.binary) for i in range (len(movie_df))]
 
 
-test_schedule_df = channel_0_schedule_df.head(50)
-demo_df = channel_0_schedule_df.drop_duplicates(['content'])
-demo_content = demo_df['content']
-print(demo_df.head())
-(calculate_ad_slot_price(channel_0_schedule_df, 10000, 0.2, 0.002, 0.001))
+# test_schedule_df = channel_0_schedule_df.head(50)
+# demo_df = channel_0_schedule_df.drop_duplicates(['content'])
+# demo_content = demo_df['content']
+# print(demo_df.head())
+# (calculate_ad_slot_price(channel_0_schedule_df, 10000, 0.2, 0.002, 0.001))
 
-## Objective Function
+# ## Objective Function
 
-scheduling = xp.problem('scheduling')
-scheduling.addVariable(movie_var)
+# scheduling = xp.problem('scheduling')
+# scheduling.addVariable(movie_var)
 
 
-adincome = ad_slot_cost * movie_var 
-licensing_fee = licensing_fee * movie_var
-adexpense = 0
-maximize_profit = (adincome) - (licensing_fee) - (adexpense)
-scheduling.setObjective()
+# adincome = ad_slot_cost * movie_var 
+# licensing_fee = licensing_fee * movie_var
+# adexpense = 0
+# maximize_profit = (adincome) - (licensing_fee) - (adexpense)
+# scheduling.setObjective()
 
 
 
