@@ -8,19 +8,36 @@ from utils.data_processing import process_table, SLOT_DURATION
 
 
 def import_data():
-    mov_df = pd.read_csv('data/movie_database.csv')
-    ch_a_schedule_df = pd.read_csv('data/channel_A_schedule.csv')
-    # ch_0_conversion_rates_df = pd.read_csv('data/channel_0_conversion_rates.csv')
-    # ch_1_conversion_rates_df = pd.read_csv('data/channel_1_conversion_rates.csv')
-    # ch_2_conversion_rates_df = pd.read_csv('data/channel_2_conversion_rates.csv')
-    ch_0_schedule_df = pd.read_csv('data/channel_0_schedule.csv')
-    # ch_1_schedule_df = pd.read_csv('data/channel_1_schedule.csv')
-    # ch_2_schedule_df = pd.read_csv('data/channel_2_schedule.csv')
+    movie_df = pd.read_csv('../data/movie_database.csv')
+    channel_0_conversion_rates_df = pd.read_csv(
+        '../data/channel_0_conversion_rates.csv', index_col=[0])
+    channel_0_conversion_rates_df.index = pd.to_datetime(
+        channel_0_conversion_rates_df.index)
+    channel_1_conversion_rates_df = pd.read_csv(
+        '../data/channel_1_conversion_rates.csv', index_col=[0])
+    channel_1_conversion_rates_df.index = pd.to_datetime(
+        channel_1_conversion_rates_df.index)
+    channel_2_conversion_rates_df = pd.read_csv(
+        '../data/channel_2_conversion_rates.csv', index_col=[0])
+    channel_2_conversion_rates_df.index = pd.to_datetime(
+        channel_2_conversion_rates_df.index)
+    channel_a_schedule_df = pd.read_csv(
+        '../data/channel_A_schedule.csv', index_col=[0])
+    channel_a_schedule_df.index = pd.to_datetime(channel_a_schedule_df.index)
+    channel_0_schedule_df = pd.read_csv(
+        '../data/channel_0_schedule.csv', index_col=[0])
+    channel_0_schedule_df.index = pd.to_datetime(channel_0_schedule_df.index)
+    channel_1_schedule_df = pd.read_csv(
+        '../data/channel_1_schedule.csv', index_col=[0])
+    channel_1_schedule_df.index = pd.to_datetime(channel_1_schedule_df.index)
+    channel_2_schedule_df = pd.read_csv(
+        '../data/channel_2_schedule.csv', index_col=[0])
+    channel_2_schedule_df.index = pd.to_datetime(channel_2_schedule_df.index)
 
-    return mov_df, ch_a_schedule_df, ch_0_schedule_df
+    return movie_df, channel_0_conversion_rates_df, channel_1_conversion_rates_df, channel_2_conversion_rates_df, channel_a_schedule_df, channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df
 
 
-movie_df, channel_a_schedule_df, channel_0_schedule_df = import_data()
+movie_df, channel_0_conversion_rates_df, channel_1_conversion_rates_df, channel_2_conversion_rates_df, channel_a_schedule_df, channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df = import_data()
 movie_df = process_table(movie_df)
 
 ######## --------------- ###################
@@ -61,16 +78,20 @@ scheduling.setObjective(-xp.Sum(movie_df['license_fee'][i] * movie[i] for i in M
                         sense=xp.maximize)
 
 # Constraints
-scheduling.addConstraint(xp.Sum(movie_time[i, j] for i in Movies) == 1 for j in TimeSlots)
+scheduling.addConstraint(
+    xp.Sum(movie_time[i, j] for i in Movies) == 1 for j in TimeSlots)
 scheduling.addConstraint(xp.Sum(movie_time[i, j] for j in TimeSlots) ==
                          movie[i] * movie_df['total_time_slots'][i] for i in Movies)
 
-scheduling.addConstraint(end_time[i] - start_time[i] + 1 == movie[i] * movie_df['total_time_slots'][i] for i in Movies)
-scheduling.addConstraint(end_time[i] >= j * movie_time[i, j] for i in Movies for j in TimeSlots)
+scheduling.addConstraint(end_time[i] - start_time[i] + 1 ==
+                         movie[i] * movie_df['total_time_slots'][i] for i in Movies)
+scheduling.addConstraint(end_time[i] >= j * movie_time[i, j]
+                         for i in Movies for j in TimeSlots)
 scheduling.addConstraint(start_time[i] <= j * movie_time[i, j] + (1 - movie_time[i, j]) * TOTAL_SLOTS
                          for i in Movies for j in TimeSlots)
 
-scheduling.addConstraint(xp.Sum(movie_df['runtime_with_ads'][i] * movie[i] for i in Movies) <= MAX_RUNTIME_MIN_PER_DAY)
+scheduling.addConstraint(xp.Sum(
+    movie_df['runtime_with_ads'][i] * movie[i] for i in Movies) <= MAX_RUNTIME_MIN_PER_DAY)
 scheduling.addConstraint(
     xp.Sum(ad_slots[i, j] for j in Ad_Buyers) <= movie[i] * movie_df['n_ad_breaks'][i] for i in Movies)
 
@@ -84,13 +105,16 @@ selected_index = [i for i in Movies if scheduling.getSolution(movie[i]) == 1]
 
 selected_movies = [movie_df['title'][i] for i in selected_index]
 selected_n_ad_break = [movie_df['n_ad_breaks'][i] for i in selected_index]
-selected_ad_price = [movie_df['ad_slot_with_viewership'][i] for i in selected_index]
-selected_runtime_with_ad = [movie_df['runtime_with_ads'][i] for i in selected_index]
+selected_ad_price = [movie_df['ad_slot_with_viewership'][i]
+                     for i in selected_index]
+selected_runtime_with_ad = [
+    movie_df['runtime_with_ads'][i] for i in selected_index]
 selected_licensing_fee = [movie_df['license_fee'][i] for i in selected_index]
 selected_popularity = [movie_df['popularity'][i] for i in selected_index]
 
 total_runtime = sum(selected_runtime_with_ad)
-total_ad_price = sum([selected_n_ad_break[i] * selected_ad_price[i] for i in range(len(selected_index))])
+total_ad_price = sum([selected_n_ad_break[i] * selected_ad_price[i]
+                     for i in range(len(selected_index))])
 total_licensing_fee = sum(selected_licensing_fee)
 
 print(f"Movies selected: {selected_movies}")

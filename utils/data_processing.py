@@ -25,15 +25,18 @@ def estimated_view_count(demographic_baseline,
                          latest_showing_date=None,
                          current_date=None):
     def estimate_view_count_calculation(baseline, popularity):
-        return baseline + popularity
+
+        baseline = 1
+
+        return baseline*popularity
 
     total_view_count = 0
     demographic_view_list = []
     for demographic in range(len(demographic_popularity)):
         demographic_expected_view_count = estimate_view_count_calculation(demographic_baseline[demographic],
                                                                           demographic_popularity[demographic])
-        # penalty = decay_view_penelty(demographic_expected_view_count, 
-        #                     latest_showing_date, 
+        # penalty = decay_view_penelty(demographic_expected_view_count,
+        #                     latest_showing_date,
         #                     current_date)
 
         # demographic_expected_view_count = demographic_expected_view_count - penalty
@@ -68,14 +71,17 @@ def decay_view_penelty(estimate_view, latest_showing_date, current_date):
 
 
 def process_table(movie_df):
-    movie_df['license_fee'] = create_licence_fee_vector(movie_df['budget'], movie_df['revenue'])
+    movie_df['license_fee'] = create_licence_fee_vector(
+        movie_df['budget'], movie_df['revenue'])
 
     demographic_popularity_list = []
     for demographic in DEMOGRAPHIC_LIST:
-        demographic_popularity_list.append(movie_df[f'{demographic}_scaled_popularity'])
+        demographic_popularity_list.append(
+            movie_df[f'{demographic}_scaled_popularity'])
 
     baseline = [0, 0, 0]
-    demographic_view_list, total_view_count = estimated_view_count(baseline, demographic_popularity_list)
+    demographic_view_list, total_view_count = estimated_view_count(
+        baseline, demographic_popularity_list)
 
     demo = 0
     for demographic in DEMOGRAPHIC_LIST:
