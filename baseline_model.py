@@ -45,7 +45,7 @@ print(movie_df.columns)
 
 # Objective Function
 scheduling.setObjective(-xp.Sum(movie_df['license_fee'][i] * m[i] for i in Movies) +
-                        xp.Sum(xp.Sum(ad_slots[i, j] for j in Ad_Buyers) * movie_df['ad_slot_price'][i] * m[i]
+                        xp.Sum(xp.Sum(ad_slots[i, j] for j in Ad_Buyers) * movie_df['ad_slot_price'][i]
                                for i in Movies),
                         sense=xp.maximize)
 
@@ -56,7 +56,28 @@ scheduling.addConstraint(xp.Sum(ad_slots[i, j] for j in Ad_Buyers) <= m[i] * mov
 # xp.setOutputEnabled(False)
 scheduling.solve()
 
-print(scheduling.getObjVal())
+print(f"Objective value: {scheduling.getObjVal()}")
+
+selected_index = [i for i in Movies if scheduling.getSolution(m[i]) == 1]
+selected_movies = [movie_df.title[i] for i in selected_index]
+selected_n_ad_break = [movie_df.n_ad_breaks[i] for i in selected_index]
+selected_ad_price = [movie_df.ad_slot_price[i] for i in selected_index]
+selected_runtime_with_ad = [movie_df.runtime_with_ads[i] for i in selected_index]
+selected_licensing_fee = [movie_df.license_fee[i] for i in selected_index]
+
+total_runtime = sum(selected_runtime_with_ad)
+total_ad_price = sum([selected_n_ad_break[i] * selected_ad_price[i] for i in range(len(selected_index))])
+total_licensing_fee = sum(selected_licensing_fee)
+print(f"Movies selected: {selected_movies}")
+print(f"Ad break: {selected_n_ad_break}")
+print(f"Ad price: {selected_ad_price}")
+print(f"Licensing fee: {selected_licensing_fee}")
+print(f"Runtime with ad: {selected_runtime_with_ad}")
+print(f"Total runtime: {total_runtime}")
+print(f"Total ad price: {total_ad_price}")
+print(f"Total licensing fee: {total_licensing_fee}")
+print(f"Total profit: {total_ad_price - total_licensing_fee}")
+
 
 
 # test_schedule_df = channel_0_schedule_df.head(50)
