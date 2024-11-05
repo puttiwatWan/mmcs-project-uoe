@@ -8,36 +8,37 @@ from utils.data_processing import process_table, SLOT_DURATION
 
 
 def import_data():
-    movie_df = pd.read_csv('../data/movie_database.csv')
-    channel_0_conversion_rates_df = pd.read_csv(
-        '../data/channel_0_conversion_rates.csv', index_col=[0])
-    channel_0_conversion_rates_df.index = pd.to_datetime(
-        channel_0_conversion_rates_df.index)
-    channel_1_conversion_rates_df = pd.read_csv(
-        '../data/channel_1_conversion_rates.csv', index_col=[0])
-    channel_1_conversion_rates_df.index = pd.to_datetime(
-        channel_1_conversion_rates_df.index)
-    channel_2_conversion_rates_df = pd.read_csv(
-        '../data/channel_2_conversion_rates.csv', index_col=[0])
-    channel_2_conversion_rates_df.index = pd.to_datetime(
-        channel_2_conversion_rates_df.index)
-    channel_a_schedule_df = pd.read_csv(
-        '../data/channel_A_schedule.csv', index_col=[0])
-    channel_a_schedule_df.index = pd.to_datetime(channel_a_schedule_df.index)
-    channel_0_schedule_df = pd.read_csv(
-        '../data/channel_0_schedule.csv', index_col=[0])
-    channel_0_schedule_df.index = pd.to_datetime(channel_0_schedule_df.index)
-    channel_1_schedule_df = pd.read_csv(
-        '../data/channel_1_schedule.csv', index_col=[0])
-    channel_1_schedule_df.index = pd.to_datetime(channel_1_schedule_df.index)
-    channel_2_schedule_df = pd.read_csv(
-        '../data/channel_2_schedule.csv', index_col=[0])
-    channel_2_schedule_df.index = pd.to_datetime(channel_2_schedule_df.index)
+    base_path = "../data/"
+    
+    mov_df = pd.read_csv(base_path + 'movie_database.csv')
 
-    return movie_df, channel_0_conversion_rates_df, channel_1_conversion_rates_df, channel_2_conversion_rates_df, channel_a_schedule_df, channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df
+    ch_0_conversion_rates_df = pd.read_csv(base_path + 'channel_0_conversion_rates.csv', index_col=[0])
+    ch_0_conversion_rates_df.index = pd.to_datetime(ch_0_conversion_rates_df.index)
+
+    ch_1_conversion_rates_df = pd.read_csv(base_path + 'channel_1_conversion_rates.csv', index_col=[0])
+    ch_1_conversion_rates_df.index = pd.to_datetime(ch_1_conversion_rates_df.index)
+
+    ch_2_conversion_rates_df = pd.read_csv(base_path + 'channel_2_conversion_rates.csv', index_col=[0])
+    ch_2_conversion_rates_df.index = pd.to_datetime(ch_2_conversion_rates_df.index)
+
+    ch_a_schedule_df = pd.read_csv(base_path + 'channel_A_schedule.csv', index_col=[0])
+    ch_a_schedule_df.index = pd.to_datetime(ch_a_schedule_df.index)
+
+    ch_0_schedule_df = pd.read_csv(base_path + 'channel_0_schedule.csv', index_col=[0])
+    ch_0_schedule_df.index = pd.to_datetime(ch_0_schedule_df.index)
+
+    ch_1_schedule_df = pd.read_csv(base_path + 'channel_1_schedule.csv', index_col=[0])
+    ch_1_schedule_df.index = pd.to_datetime(ch_1_schedule_df.index)
+
+    ch_2_schedule_df = pd.read_csv(base_path + 'channel_2_schedule.csv', index_col=[0])
+    ch_2_schedule_df.index = pd.to_datetime(ch_2_schedule_df.index)
+
+    return (mov_df, ch_0_conversion_rates_df, ch_1_conversion_rates_df, ch_2_conversion_rates_df, ch_a_schedule_df,
+            ch_0_schedule_df, ch_1_schedule_df, ch_2_schedule_df)
 
 
-movie_df, channel_0_conversion_rates_df, channel_1_conversion_rates_df, channel_2_conversion_rates_df, channel_a_schedule_df, channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df = import_data()
+(movie_df, channel_0_conversion_rates_df, channel_1_conversion_rates_df, channel_2_conversion_rates_df,
+ channel_a_schedule_df, channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df) = import_data()
 movie_df = process_table(movie_df)
 
 ######## --------------- ###################
