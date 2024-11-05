@@ -1,7 +1,5 @@
-import pandas as pd
-import numpy as np
 import xpress as xp
-from advert_conversion_rates import *
+from advert_conversion_rates import *  # including np and pd
 from utils.data_processing import process_table, SLOT_DURATION
 
 # xp.init('/Applications/FICO Xpress/xpressmp/bin/xpauth.xpr')
