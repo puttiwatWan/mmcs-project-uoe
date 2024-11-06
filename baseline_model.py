@@ -62,20 +62,27 @@ Days = range(number_of_days)
 scheduling = xp.problem('scheduling')
 
 # Declare
-movie = np.array([xp.var(name="m_{0}_{1}".format(i + 1, j + 1), vartype=xp.binary)
-                  for i in Movies for j in Days], dtype=xp.npvar).reshape(number_of_movies, number_of_days)
-movie_time = (np.array([xp.var(name="mt_{0}_{1}_{2}".format(i + 1, j + 1, k + 1), vartype=xp.binary)
-                       for i in Movies for j in TimeSlots for k in Days], dtype=xp.npvar).
-              reshape(number_of_movies, number_of_time_slots, number_of_days))
-start_time = np.array([xp.var(name="s_{0}_{1}".format(i + 1, d + 1), vartype=xp.integer)
-                       for i in Movies for d in Days], dtype=xp.npvar).reshape(number_of_movies, number_of_days)
-end_time = np.array([xp.var(name="e_{0}_{1}".format(i + 1, d + 1), vartype=xp.integer)
-                     for i in Movies for d in Days], dtype=xp.npvar).reshape(number_of_movies, number_of_days)
-ad_slots = (np.array([xp.var(name="ad_slot_{0}_{1}_{2}".format(i + 1, j + 1, d + 1), vartype=xp.integer)
-                     for i in Movies for j in Ad_Buyers for d in Days], dtype=xp.npvar).
-            reshape(number_of_movies, number_of_buyers, number_of_days))
+movie = scheduling.addVariables(number_of_movies, number_of_days, name='m', vartype=xp.binary)
+# movie = np.array([xp.var(name="m_{0}_{1}".format(i + 1, j + 1), vartype=xp.binary)
+#                   for i in Movies for j in Days], dtype=xp.npvar).reshape(number_of_movies, number_of_days)
+movie_time = scheduling.addVariables(number_of_movies, number_of_time_slots, number_of_days, name="mt",
+                                     vartype=xp.binary)
+# movie_time = (np.array([xp.var(name="mt_{0}_{1}_{2}".format(i + 1, j + 1, k + 1), vartype=xp.binary)
+#                        for i in Movies for j in TimeSlots for k in Days], dtype=xp.npvar).
+#               reshape(number_of_movies, number_of_time_slots, number_of_days))
+start_time = scheduling.addVariables(number_of_movies, number_of_days, name='s', vartype=xp.integer)
+# start_time = np.array([xp.var(name="s_{0}_{1}".format(i + 1, d + 1), vartype=xp.integer)
+#                        for i in Movies for d in Days], dtype=xp.npvar).reshape(number_of_movies, number_of_days)
+end_time = scheduling.addVariables(number_of_movies, number_of_days, name='e', vartype=xp.integer)
+# end_time = np.array([xp.var(name="e_{0}_{1}".format(i + 1, d + 1), vartype=xp.integer)
+#                      for i in Movies for d in Days], dtype=xp.npvar).reshape(number_of_movies, number_of_days)
+ad_slots = scheduling.addVariables(number_of_movies, number_of_buyers, number_of_days, name="as",
+                                   vartype=xp.integer)
+# ad_slots = (np.array([xp.var(name="ad_slot_{0}_{1}_{2}".format(i + 1, j + 1, d + 1), vartype=xp.integer)
+#                      for i in Movies for j in Ad_Buyers for d in Days], dtype=xp.npvar).
+#             reshape(number_of_movies, number_of_buyers, number_of_days))
 
-scheduling.addVariable(movie, movie_time, start_time, end_time, ad_slots)
+# scheduling.addVariable(movie, movie_time, start_time, end_time, ad_slots)
 
 print(movie_df.columns)
 
@@ -102,6 +109,7 @@ scheduling.addConstraint(xp.Sum(
 scheduling.addConstraint(xp.Sum(ad_slots[i, j, d] for j in Ad_Buyers) <= movie[i, d] * movie_df['n_ad_breaks'][i]
                          for i in Movies for d in Days)
 
+# expect no duplicated movies within the number_of_days
 scheduling.addConstraint(xp.Sum(movie[i, d] for d in Days) <= 1 for i in Movies)
 
 # xp.setOutputEnabled(False)
