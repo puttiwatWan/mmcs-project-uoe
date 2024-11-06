@@ -80,7 +80,7 @@ scheduling.addVariable(movie, movie_time, start_time, end_time, ad_slots)
 print(movie_df.columns)
 
 # Objective Function
-scheduling.setObjective(-xp.Sum(movie_df['license_fee'][i] * movie[i] for i in Movies) +
+scheduling.setObjective(-xp.Sum(movie_df['license_fee'][i] * xp.Sum(movie[i, d] for d in Days) for i in Movies) +
                         xp.Sum(xp.Sum(ad_slots[i, j, d] for j in Ad_Buyers for d in Days) *
                                movie_df['ad_slot_with_viewership'][i] for i in Movies),
                         sense=xp.maximize)
