@@ -42,7 +42,7 @@ def import_data():
 (movie_df, channel_0_conversion_rates_df, channel_1_conversion_rates_df, channel_2_conversion_rates_df,
  channel_a_schedule_df, channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df) = import_data()
 movie_df = process_table(movie_df)
-movie_df = movie_df.head(100)
+# movie_df = movie_df.head(100)
 
 ######## --------------- ###################
 MAX_RUNTIME_MIN_PER_DAY = 17 * 60
@@ -58,7 +58,7 @@ Ad_Buyers = range(number_of_buyers)
 number_of_time_slots = (24 - 7) * 2  # 30 min each
 TimeSlots = range(number_of_time_slots)
 
-number_of_days = 2
+number_of_days = 1
 Days = range(number_of_days)
 
 scheduling = xp.problem('scheduling')
