@@ -26,8 +26,6 @@ def estimated_view_count(demographic_baseline,
                          current_date=None):
     def estimate_view_count_calculation(baseline, popularity):
 
-        baseline = 1
-
         return baseline*popularity
 
     total_view_count = 0
@@ -70,7 +68,7 @@ def decay_view_penelty(estimate_view, latest_showing_date, current_date):
     return penalty * estimate_view
 
 
-def process_table(movie_df):
+def process_table(movie_df, schedule_df):
     movie_df['license_fee'] = create_licence_fee_vector(
         movie_df['budget'], movie_df['revenue'])
 

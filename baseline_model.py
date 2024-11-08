@@ -1,6 +1,7 @@
 import xpress as xp
 from advert_conversion_rates import *  # including np and pd
 from utils.data_processing import process_table, SLOT_DURATION
+from utils.data_processing import schedule_processing, combine_schedule
 from datetime import datetime as dt
 from IPython.display import display
 
@@ -42,6 +43,10 @@ def import_data():
 (movie_df, channel_0_conversion_rates_df, channel_1_conversion_rates_df, channel_2_conversion_rates_df,
  channel_a_schedule_df, channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df) = import_data()
 movie_df = process_table(movie_df)
+channel_a_30_schedule_df = schedule_processing(channel_a_schedule_df)
+combine_30min_df = combine_schedule(channel_a_30_schedule_df)
+
+
 # movie_df = movie_df.head(100)
 
 ######## --------------- ###################
@@ -71,8 +76,6 @@ start_time = scheduling.addVariables(number_of_movies, number_of_days, name='s',
 end_time = scheduling.addVariables(number_of_movies, number_of_days, name='e', vartype=xp.integer)
 ad_slots = scheduling.addVariables(number_of_movies, number_of_buyers, number_of_days, name="as",
                                    vartype=xp.integer)
-
-print(movie_df.columns)
 
 # Objective Function
 scheduling.setObjective(-xp.Sum(movie_df['license_fee'][i] * xp.Sum(movie[i, d] for d in Days) for i in Movies) +
