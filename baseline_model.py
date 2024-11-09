@@ -75,7 +75,7 @@ movie_time = scheduling.addVariables(number_of_movies, number_of_time_slots, num
 start_time = scheduling.addVariables(number_of_movies, number_of_days, name='s', vartype=xp.integer)
 end_time = scheduling.addVariables(number_of_movies, number_of_days, name='e', vartype=xp.integer)
 ad_slots = scheduling.addVariables(number_of_movies, number_of_time_slots, number_of_buyers, number_of_days,
-                                   name="abs", vartype=xp.integer)
+                                   name="abs", vartype=xp.binary)
 
 # Objective Function
 scheduling.setObjective(-xp.Sum(movie_df['license_fee'][i] * xp.Sum(movie[i, d] for d in Days) for i in Movies) +
