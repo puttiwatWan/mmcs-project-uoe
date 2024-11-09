@@ -74,12 +74,12 @@ movie_time = scheduling.addVariables(number_of_movies, number_of_time_slots, num
                                      vartype=xp.binary)
 start_time = scheduling.addVariables(number_of_movies, number_of_days, name='s', vartype=xp.integer)
 end_time = scheduling.addVariables(number_of_movies, number_of_days, name='e', vartype=xp.integer)
-ad_slots = scheduling.addVariables(number_of_movies, number_of_buyers, number_of_days, name="as",
-                                   vartype=xp.integer)
+ad_slots = scheduling.addVariables(number_of_movies, number_of_time_slots, number_of_buyers, number_of_days,
+                                   name="abs", vartype=xp.integer)
 
 # Objective Function
 scheduling.setObjective(-xp.Sum(movie_df['license_fee'][i] * xp.Sum(movie[i, d] for d in Days) for i in Movies) +
-                        xp.Sum(xp.Sum(ad_slots[i, b, d] for b in Ad_Buyers for d in Days) *
+                        xp.Sum(xp.Sum(ad_slots[i, t, b, d] for b in Ad_Buyers for d in Days for t in TimeSlots) *
                                movie_df['ad_slot_with_viewership'][i] for i in Movies),
                         sense=xp.maximize)
 
@@ -97,8 +97,10 @@ scheduling.addConstraint(start_time[i, d] <= t * movie_time[i, t, d] + (1 - movi
 
 scheduling.addConstraint(xp.Sum(
     movie_df['total_time_slots'][i] * movie[i, d] for i in Movies) <= TOTAL_SLOTS for d in Days)
-scheduling.addConstraint(xp.Sum(ad_slots[i, b, d] for b in Ad_Buyers) <= movie[i, d] * movie_df['n_ad_breaks'][i]
-                         for i in Movies for d in Days)
+scheduling.addConstraint(xp.Sum(ad_slots[i, t, b, d] for b in Ad_Buyers for t in TimeSlots) <= movie[i, d] *
+                         movie_df['n_ad_breaks'][i] for i in Movies for d in Days)
+scheduling.addConstraint(xp.Sum(ad_slots[i, t, b, d] for b in Ad_Buyers) <= movie_time[i, t, d]
+                         for i in Movies for d in Days for t in TimeSlots)
 
 # expect no duplicated movies within the number_of_days
 scheduling.addConstraint(xp.Sum(movie[i, d] for d in Days) <= 1 for i in Movies)
@@ -119,8 +121,8 @@ display(mdf[mdf.any(axis='columns')])
 
 mt_sol = scheduling.getSolution(movie_time)
 m, n, r = mt_sol.shape
-mt_sol = mt_sol.reshape(m, n*r)
-slot_day_labels = ['slot_{0}_day_{1}'.format(i, j) for i in TimeSlots for j in Days]
+mt_sol = mt_sol.reshape(m, n * r)
+slot_day_labels = ['slot_{0}_day_{1}'.format(t, d) for t in TimeSlots for d in Days]
 mt_df = pd.DataFrame(data=mt_sol, index=movie_df['title'], columns=slot_day_labels)
 mt_df[mt_df.any(axis='columns')].to_csv('out/movie_time.csv')
 display(mt_df[mt_df.any(axis='columns')])
@@ -129,6 +131,14 @@ st_df = pd.DataFrame(data=scheduling.getSolution(start_time), index=movie_df['ti
 display(st_df[mdf.any(axis='columns')])
 et_df = pd.DataFrame(data=scheduling.getSolution(end_time), index=movie_df['title'], columns=days_labels)
 display(et_df[mdf.any(axis='columns')])
+
+as_sol = scheduling.getSolution(ad_slots)
+m, n, p, q = as_sol.shape
+as_sol = as_sol.reshape(m, n * q * p)
+slot_buyer_day_label = ['slot_{0}_buyer_{1}_day_{2}'.format(t, b, d)
+                        for t in TimeSlots for b in Ad_Buyers for d in Days]
+as_df = pd.DataFrame(data=as_sol, index=movie_df['title'], columns=slot_buyer_day_label)
+as_df[mdf.any(axis='columns')].to_csv('out/ad_slots.csv')
 
 print("===== Total time used to get solutions into dataframe: {0} seconds".format((dt.now() - st).total_seconds()))
 
