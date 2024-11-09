@@ -1,7 +1,7 @@
 import xpress as xp
 from advert_conversion_rates import *  # including np and pd
 from utils.data_processing import process_table, SLOT_DURATION
-from utils.data_processing import schedule_processing, combine_schedule
+from utils.schedule_processing import combine_schedule, consolidate_time_to_30_mins_slot
 from datetime import datetime as dt
 from IPython.display import display
 
@@ -43,7 +43,7 @@ def import_data():
 (movie_df, channel_0_conversion_rates_df, channel_1_conversion_rates_df, channel_2_conversion_rates_df,
  channel_a_schedule_df, channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df) = import_data()
 movie_df = process_table(movie_df)
-channel_a_30_schedule_df = schedule_processing(channel_a_schedule_df)
+channel_a_30_schedule_df = consolidate_time_to_30_mins_slot(channel_a_schedule_df)
 combine_30min_df = combine_schedule(channel_a_30_schedule_df)
 
 
@@ -79,25 +79,25 @@ ad_slots = scheduling.addVariables(number_of_movies, number_of_buyers, number_of
 
 # Objective Function
 scheduling.setObjective(-xp.Sum(movie_df['license_fee'][i] * xp.Sum(movie[i, d] for d in Days) for i in Movies) +
-                        xp.Sum(xp.Sum(ad_slots[i, j, d] for j in Ad_Buyers for d in Days) *
+                        xp.Sum(xp.Sum(ad_slots[i, b, d] for b in Ad_Buyers for d in Days) *
                                movie_df['ad_slot_with_viewership'][i] for i in Movies),
                         sense=xp.maximize)
 
 # Constraints
-scheduling.addConstraint(xp.Sum(movie_time[i, j, d] for i in Movies) == 1 for j in TimeSlots for d in Days)
-scheduling.addConstraint(xp.Sum(movie_time[i, j, d] for j in TimeSlots) ==
+scheduling.addConstraint(xp.Sum(movie_time[i, t, d] for i in Movies) == 1 for t in TimeSlots for d in Days)
+scheduling.addConstraint(xp.Sum(movie_time[i, t, d] for t in TimeSlots) ==
                          movie[i, d] * movie_df['total_time_slots'][i] for i in Movies for d in Days)
 
 scheduling.addConstraint(end_time[i, d] - start_time[i, d] + 1 ==
                          movie[i, d] * movie_df['total_time_slots'][i] for i in Movies for d in Days)
-scheduling.addConstraint(end_time[i, d] >= j * movie_time[i, j, d]
-                         for i in Movies for j in TimeSlots for d in Days)
-scheduling.addConstraint(start_time[i, d] <= j * movie_time[i, j, d] + (1 - movie_time[i, j, d]) * TOTAL_SLOTS
-                         for i in Movies for j in TimeSlots for d in Days)
+scheduling.addConstraint(end_time[i, d] >= t * movie_time[i, t, d]
+                         for i in Movies for t in TimeSlots for d in Days)
+scheduling.addConstraint(start_time[i, d] <= t * movie_time[i, t, d] + (1 - movie_time[i, t, d]) * TOTAL_SLOTS
+                         for i in Movies for t in TimeSlots for d in Days)
 
 scheduling.addConstraint(xp.Sum(
     movie_df['total_time_slots'][i] * movie[i, d] for i in Movies) <= TOTAL_SLOTS for d in Days)
-scheduling.addConstraint(xp.Sum(ad_slots[i, j, d] for j in Ad_Buyers) <= movie[i, d] * movie_df['n_ad_breaks'][i]
+scheduling.addConstraint(xp.Sum(ad_slots[i, b, d] for b in Ad_Buyers) <= movie[i, d] * movie_df['n_ad_breaks'][i]
                          for i in Movies for d in Days)
 
 # expect no duplicated movies within the number_of_days
@@ -111,15 +111,25 @@ print("===== Total time used to solve: {0} seconds".format((dt.now() - st).total
 # Printing
 print(f"Objective value: {scheduling.getObjVal()}")
 
-days_list = ['day_{0}'.format(i) for i in Days]
-time_slots_list = ['slot_{0}'.format(i) for i in TimeSlots]
+days_labels = ['day_{0}'.format(d) for d in Days]
+time_slots_labels = ['slot_{0}'.format(t) for t in TimeSlots]
 st = dt.now()
-mdf = pd.DataFrame(data=scheduling.getSolution(movie), index=movie_df['title'], columns=days_list)
+mdf = pd.DataFrame(data=scheduling.getSolution(movie), index=movie_df['title'], columns=days_labels)
 display(mdf[mdf.any(axis='columns')])
 
-# mt_df = pd.DataFrame(data=scheduling.getSolution(movie_time), index=movie_df['title'],
-#                      columns=pd.MultiIndex.from_tuples(zip(days_list, time_slots_list)))
-# display(mt_df)
+mt_sol = scheduling.getSolution(movie_time)
+m, n, r = mt_sol.shape
+mt_sol = mt_sol.reshape(m, n*r)
+slot_day_labels = ['slot_{0}_day_{1}'.format(i, j) for i in TimeSlots for j in Days]
+mt_df = pd.DataFrame(data=mt_sol, index=movie_df['title'], columns=slot_day_labels)
+mt_df[mt_df.any(axis='columns')].to_csv('out/movie_time.csv')
+display(mt_df[mt_df.any(axis='columns')])
+
+st_df = pd.DataFrame(data=scheduling.getSolution(start_time), index=movie_df['title'], columns=days_labels)
+display(st_df[mdf.any(axis='columns')])
+et_df = pd.DataFrame(data=scheduling.getSolution(end_time), index=movie_df['title'], columns=days_labels)
+display(et_df[mdf.any(axis='columns')])
+
 print("===== Total time used to get solutions into dataframe: {0} seconds".format((dt.now() - st).total_seconds()))
 
 print("===== Total time used for printing: {0} seconds".format((dt.now() - st).total_seconds()))
