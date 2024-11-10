@@ -1,6 +1,6 @@
 import xpress as xp
 import pandas as pd
-from utils.data_processing import process_table, SLOT_DURATION
+from utils.data_processing import process_table, DEMOGRAPHIC_LIST, SLOT_DURATION
 from utils.schedule_processing import combine_schedule, consolidate_time_to_30_mins_slot
 from datetime import datetime as dt
 from IPython.display import display
@@ -79,8 +79,12 @@ ad_slots = scheduling.addVariables(number_of_movies, number_of_time_slots, numbe
 
 # Objective Function
 scheduling.setObjective(-xp.Sum(movie_df['license_fee'][i] * xp.Sum(movie[i, d] for d in Days) for i in Movies) +
-                        xp.Sum(xp.Sum(ad_slots[i, t, b, d] for b in Ad_Buyers for d in Days for t in TimeSlots) *
-                               movie_df['ad_slot_with_viewership'][i] for i in Movies),
+                        xp.Sum(combine_30min_df[f"{demo}_prime_time_view_count"][t] *
+                               movie_df[f"{demo}_scaled_popularity"][i] * ad_slots[i, t, b, d]
+                               for i in Movies for t in TimeSlots for b in Ad_Buyers for d in Days
+                               for demo in DEMOGRAPHIC_LIST),
+                        # xp.Sum(xp.Sum(ad_slots[i, t, b, d] for b in Ad_Buyers for d in Days for t in TimeSlots) *
+                        #        movie_df['ad_slot_with_viewership'][i] for i in Movies),
                         sense=xp.maximize)
 
 # Constraints
