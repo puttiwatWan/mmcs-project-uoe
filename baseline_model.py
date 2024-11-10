@@ -1,5 +1,5 @@
 import xpress as xp
-from advert_conversion_rates import *  # including np and pd
+import pandas as pd
 from utils.data_processing import process_table, SLOT_DURATION
 from utils.schedule_processing import combine_schedule, consolidate_time_to_30_mins_slot
 from datetime import datetime as dt
