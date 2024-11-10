@@ -99,7 +99,8 @@ def risk_view_functions(expected_view):
 
     percentage = 0.80
     z = st.norm.ppf((1+percentage) / 2)
-    variance_factor = np.sqrt(1 * ((10)**(0)))
+    variance_factor = np.sqrt(1.5 * ((10)**(-1)))
     upper = expected_view + (expected_view * z * variance_factor)
     lower = expected_view - (expected_view * z * variance_factor)
     return upper, lower
+
