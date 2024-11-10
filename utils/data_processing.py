@@ -9,10 +9,7 @@ DEMOGRAPHIC_LIST = ['children', 'adults', 'retirees']
 SLOT_DURATION = 30
 
 
-def create_licence_fee_vector(budget, revenue):
-    base_fee = BASE_FEE
-    budget_factor = PROFIT_MARGIN
-    box_office_revenue_factor = 0.001
+def create_licence_fee_vector(budget: pd.Series, revenue: pd.Series) -> pd.Series:
     license_fee = (BASE_FEE + (BUDGET_FACTOR * budget)
                    + (BOX_OFFICE_REVENUE_FACTOR * revenue)
                    ) * (1. + PROFIT_MARGIN)
@@ -20,12 +17,11 @@ def create_licence_fee_vector(budget, revenue):
     return license_fee
 
 
-def estimated_view_count(demographic_baseline,
-                         demographic_popularity,
+def estimated_view_count(demographic_baseline: list[float],
+                         demographic_popularity: list[pd.Series],
                          latest_showing_date=None,
-                         current_date=None):
-    def estimate_view_count_calculation(baseline, popularity):
-
+                         current_date=None) -> (list[pd.Series], int):
+    def estimate_view_count_calculation(baseline: float, popularity: pd.Series) -> pd.Series:
         return baseline*popularity
 
     total_view_count = 0
@@ -68,7 +64,7 @@ def decay_view_penelty(estimate_view, latest_showing_date, current_date):
     return penalty * estimate_view
 
 
-def process_table(movie_df):
+def process_table(movie_df: pd.DataFrame) -> pd.DataFrame:
     movie_df['license_fee'] = create_licence_fee_vector(
         movie_df['budget'], movie_df['revenue'])
 
@@ -81,10 +77,8 @@ def process_table(movie_df):
     demographic_view_list, total_view_count = estimated_view_count(
         baseline, demographic_popularity_list)
 
-    demo = 0
-    for demographic in DEMOGRAPHIC_LIST:
-        movie_df[f'{demographic}_expected_view_count'] = demographic_view_list[demo]
-        demo = demo + 1
+    for demo in range(len(DEMOGRAPHIC_LIST)):
+        movie_df[f'{DEMOGRAPHIC_LIST[demo]}_expected_view_count'] = demographic_view_list[demo]
 
     movie_df[f'total_expected_view_count'] = total_view_count
 
