@@ -117,20 +117,27 @@ days_labels = ['day_{0}'.format(d) for d in Days]
 time_slots_labels = ['slot_{0}'.format(t) for t in TimeSlots]
 st = dt.now()
 mdf = pd.DataFrame(data=scheduling.getSolution(movie), index=movie_df['title'], columns=days_labels)
-display(mdf[mdf.any(axis='columns')])
+filtered_mdf = mdf[mdf.any(axis='columns')]
+filtered_mdf.to_csv('out/movie.csv')
+# display(filtered_mdf)
 
 mt_sol = scheduling.getSolution(movie_time)
 m, n, r = mt_sol.shape
 mt_sol = mt_sol.reshape(m, n * r)
 slot_day_labels = ['slot_{0}_day_{1}'.format(t, d) for t in TimeSlots for d in Days]
 mt_df = pd.DataFrame(data=mt_sol, index=movie_df['title'], columns=slot_day_labels)
-mt_df[mt_df.any(axis='columns')].to_csv('out/movie_time.csv')
-display(mt_df[mt_df.any(axis='columns')])
+filtered_mt_df = mt_df[mt_df.any(axis='columns')]
+filtered_mt_df.to_csv('out/movie_time.csv')
+# display(filtered_mt_df)
 
 st_df = pd.DataFrame(data=scheduling.getSolution(start_time), index=movie_df['title'], columns=days_labels)
-display(st_df[mdf.any(axis='columns')])
+filtered_st_df = st_df[mdf.any(axis='columns')]
+filtered_st_df.to_csv("out/start_time.csv")
+# display(st_df[mdf.any(axis='columns')])
 et_df = pd.DataFrame(data=scheduling.getSolution(end_time), index=movie_df['title'], columns=days_labels)
-display(et_df[mdf.any(axis='columns')])
+filtered_et_df = et_df[mdf.any(axis='columns')]
+filtered_et_df.to_csv("out/end_time.csv")
+# display(et_df[mdf.any(axis='columns')])
 
 as_sol = scheduling.getSolution(ad_slots)
 m, n, p, q = as_sol.shape
@@ -138,7 +145,8 @@ as_sol = as_sol.reshape(m, n * q * p)
 slot_buyer_day_label = ['slot_{0}_buyer_{1}_day_{2}'.format(t, b, d)
                         for t in TimeSlots for b in Ad_Buyers for d in Days]
 as_df = pd.DataFrame(data=as_sol, index=movie_df['title'], columns=slot_buyer_day_label)
-as_df[mdf.any(axis='columns')].to_csv('out/ad_slots.csv')
+filtered_as_df = (as_df[mdf.any(axis='columns')])
+filtered_as_df.to_csv('out/ad_slots.csv')
 
 print("===== Total time used to get solutions into dataframe: {0} seconds".format((dt.now() - st).total_seconds()))
 
