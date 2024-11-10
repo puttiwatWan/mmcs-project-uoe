@@ -4,7 +4,7 @@ import pandas as pd
 ### This script deal with so call "slot" #####
 
 def consolidate_time_to_30_mins_slot(df: pd.DataFrame) -> pd.DataFrame:
-    return df.resample('30min').mean()
+    return df.resample('30min').mean().dropna(axis=0, how='all')
 
 
 def combine_schedule(df_30min: pd.DataFrame) -> pd.DataFrame:
