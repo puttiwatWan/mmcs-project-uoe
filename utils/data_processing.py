@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import scipy.stats as st
 
 BASE_FEE = 10000
 PROFIT_MARGIN = 0.2
@@ -92,3 +93,13 @@ def process_table(movie_df: pd.DataFrame) -> pd.DataFrame:
     movie_df['total_time_slots'] = movie_df['runtime_with_ads'] / SLOT_DURATION
 
     return movie_df
+
+
+def risk_view_functions(expected_view):
+
+    percentage = 0.80
+    z = st.norm.ppf((1+percentage) / 2)
+    variance_factor = np.sqrt(1 * ((10)**(0)))
+    upper = expected_view + (expected_view * z * variance_factor)
+    lower = expected_view - (expected_view * z * variance_factor)
+    return upper, lower
