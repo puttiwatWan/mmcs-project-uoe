@@ -2,6 +2,7 @@ import pandas as pd
 
 DEMOGRAPHIC_LIST = ['children', 'adults', 'retirees']
 TOTAL_VIEW_COUNT = 1000000
+DAY_OFFSET = 1
 
 ### This script deal with so call "slot" #####
 
@@ -25,7 +26,7 @@ def create_competitor_schedule(channel_0_schedule_df, channel_1_schedule_df, cha
     ### To use movie_df[~movie_df['title'].isin(combine_schedule[0])] where week 0
     def create_week_year(schedule, offset=1):
 
-        schedule['week'] = schedule.index - - pd.Timedelta(offset, unit='D').isocalendar().week
+        schedule['week'] = schedule.index - pd.Timedelta(offset, unit='D').isocalendar().week
         schedule['year'] = schedule.index.isocalendar().year
         return schedule
     
@@ -62,3 +63,8 @@ def strip_ads_only(df_list):
         print(f'The price per view of channel {counter} is {sum_ad_price/ (total_expected_view* TOTAL_VIEW_COUNT)}')
         counter = counter + 1
     return ads_ratio
+
+
+def return_selected_week(df, week):
+    mask = (df.index - pd.Timedelta(DAY_OFFSET, unit='D')).isocalendar().week == week
+    return df.loc[mask.values]
