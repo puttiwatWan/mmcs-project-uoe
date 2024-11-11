@@ -6,6 +6,7 @@ from datetime import datetime as dt
 from IPython.display import display
 
 xp.init('/Applications/FICO Xpress/xpressmp/bin/xpauth.xpr')
+ADS_PRICE_PER_VIEW = 0.75 ## Get for analysis from competitors
 
 whole_st = dt.now()
 
