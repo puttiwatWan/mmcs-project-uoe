@@ -23,29 +23,27 @@ def combine_schedule(df_30min: pd.DataFrame) -> pd.DataFrame:
     return combine_30min
 
 
-def create_competitor_schedule(channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df):
+def create_competitor_schedule(competitor_list):
 
     ### To use movie_df[~movie_df['title'].isin(combine_schedule[0])] where week 0
     def create_week_year(schedule, offset=1):
 
-        schedule['week'] = schedule.index - pd.Timedelta(offset, unit='D').isocalendar().week
+        schedule['week'] = (schedule.index - pd.Timedelta(offset, unit='D')).isocalendar().week
         schedule['year'] = schedule.index.isocalendar().year
         return schedule
-    
-    channel_0_schedule_df = create_week_year(channel_0_schedule_df)
-    channel_1_schedule_df = create_week_year(channel_1_schedule_df)
-    channel_2_schedule_df = create_week_year(channel_2_schedule_df)
-    channel_0_unique_week = channel_0_schedule_df.groupby(['week', 'year'])['content'].agg(['unique'])
-    channel_1_unique_week = channel_1_schedule_df.groupby(['week', 'year'])['content'].agg(['unique'])
-    channel_2_unique_week = channel_2_schedule_df.groupby(['week', 'year'])['content'].agg(['unique'])
 
+    unique_film_list = []
+    for df in competitor_list:
+
+        df = create_week_year(df)
+        unique_film_list.append(df.groupby(['week', 'year'])['content'].agg(['unique']))
+        
     combine_schedule = []
-    for week in range(channel_0_unique_week['unique'].size):
-        zero_list = channel_0_unique_week['unique'].to_list()[week].tolist()
-        one_list = channel_1_unique_week['unique'].to_list()[week].tolist()
-        two_list = channel_2_unique_week['unique'].to_list()[week].tolist()
-        all_list = list(set(zero_list + one_list + two_list))
-        combine_schedule.append(all_list)
+    for week in range(unique_film_list[0].size):
+        all_unique_list = []
+        for channel in range(len(competitor_list)):
+            all_unique_list = list(set(all_unique_list + (unique_film_list[channel]['unique'].to_list()[week].tolist())))
+        combine_schedule.append(all_unique_list)
 
     return combine_schedule
 
