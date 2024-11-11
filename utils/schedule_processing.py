@@ -5,6 +5,7 @@ COMPETITOR_DF = ['channel_0_schedule_df', 'channel_1_schedule_df', 'channel_2_sc
 TOTAL_VIEW_COUNT = 1000000
 DAY_OFFSET = 1
 MIN_ADS_PRICE_PER_VIEW = 0.75
+LOWER_PRICE = 0.1
 
 ### This script deal with so call "slot" #####
 
@@ -77,4 +78,4 @@ def dynamic_pricing(week):
     for df in COMPETITOR_DF:
         week_df_list.append(return_selected_week(df, week))
     comp_ads_ratio = strip_ads_only(week_df_list)
-    return max(0.75, min(comp_ads_ratio))
+    return max(0.75, (min(comp_ads_ratio)) * (1-LOWER_PRICE))
