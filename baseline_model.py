@@ -1,12 +1,11 @@
 import xpress as xp
 import pandas as pd
 from utils.data_processing import process_table, DEMOGRAPHIC_LIST, SLOT_DURATION
-from utils.schedule_processing import combine_schedule, consolidate_time_to_30_mins_slot
+from utils.schedule_processing import combine_schedule, consolidate_time_to_30_mins_slot, dynamic_pricing
 from datetime import datetime as dt
 from IPython.display import display
 
 xp.init('/Applications/FICO Xpress/xpressmp/bin/xpauth.xpr')
-ADS_PRICE_PER_VIEW = 0.75 ## Get for analysis from competitors
 
 whole_st = dt.now()
 
@@ -47,8 +46,8 @@ movie_df = process_table(movie_df)
 channel_a_30_schedule_df = consolidate_time_to_30_mins_slot(channel_a_schedule_df)
 combine_30min_df = combine_schedule(channel_a_30_schedule_df)
 
-
-# movie_df = movie_df.head(100)
+### Return Pricing for the week (first week is week 40)
+ads_price_per_view = dynamic_pricing(week=40)
 
 ######## --------------- ###################
 MAX_RUNTIME_MIN_PER_DAY = 17 * 60
