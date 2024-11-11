@@ -1,7 +1,6 @@
 import pandas as pd
 
 DEMOGRAPHIC_LIST = ['children', 'adults', 'retirees']
-COMPETITOR_DF = ['channel_0_schedule_df', 'channel_1_schedule_df', 'channel_2_schedule_df']
 TOTAL_VIEW_COUNT = 1000000
 DAY_OFFSET = 1
 MIN_ADS_PRICE_PER_VIEW = 0.75
@@ -73,9 +72,9 @@ def return_selected_week(df, week):
     return df.loc[mask.values]
 
 
-def dynamic_pricing(week):
+def dynamic_pricing(week, competitor_list):
     week_df_list = []
-    for df in COMPETITOR_DF:
+    for df in competitor_list:
         week_df_list.append(return_selected_week(df, week))
     comp_ads_ratio = strip_ads_only(week_df_list)
     return max(0.75, (min(comp_ads_ratio)) * (1-LOWER_PRICE))

@@ -43,11 +43,12 @@ def import_data():
 (movie_df, channel_0_conversion_rates_df, channel_1_conversion_rates_df, channel_2_conversion_rates_df,
  channel_a_schedule_df, channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df) = import_data()
 movie_df = process_table(movie_df)
+competitor_list = [channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df]
 channel_a_30_schedule_df = consolidate_time_to_30_mins_slot(channel_a_schedule_df)
 combine_30min_df = combine_schedule(channel_a_30_schedule_df)
 
 ### Return Pricing for the week (first week is week 40)
-ads_price_per_view = dynamic_pricing(week=40)
+ads_price_per_view = dynamic_pricing(week=40, competitor_list=competitor_list)
 
 ######## --------------- ###################
 MAX_RUNTIME_MIN_PER_DAY = 17 * 60
