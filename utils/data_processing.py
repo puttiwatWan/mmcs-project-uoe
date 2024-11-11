@@ -54,17 +54,6 @@ def ad_slot_price(license_fee, n_ad_breaks):
     return license_fee / n_ad_breaks
 
 
-def decay(lambda_rate, X):
-    return np.exp(-lambda_rate * X)
-
-
-def decay_view_penelty(estimate_view, latest_showing_date, current_date):
-    lambda_rate = 1
-    delta_day = (current_date - latest_showing_date).days
-    penalty = decay(lambda_rate, delta_day)
-    return penalty * estimate_view
-
-
 def process_table(movie_df: pd.DataFrame) -> pd.DataFrame:
     movie_df['license_fee'] = create_licence_fee_vector(
         movie_df['budget'], movie_df['revenue'])

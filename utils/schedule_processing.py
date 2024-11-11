@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 DEMOGRAPHIC_LIST = ['children', 'adults', 'retirees']
@@ -26,10 +27,11 @@ def combine_schedule(df_30min: pd.DataFrame) -> pd.DataFrame:
 def create_competitor_schedule(competitor_list):
 
     ### To use movie_df[~movie_df['title'].isin(combine_schedule[0])] where week 0
-    def create_week_year(schedule, offset=1):
+    def create_week_year(schedule, offset=DAY_OFFSET):
 
-        schedule['week'] = (schedule.index - pd.Timedelta(offset, unit='D')).isocalendar().week
-        schedule['year'] = schedule.index.isocalendar().year
+        modify_index = schedule.index
+        schedule['week'] = (modify_index - pd.Timedelta(offset, unit='D')).isocalendar().week
+        schedule['year'] = modify_index.isocalendar().year
         return schedule
 
     unique_film_list = []
@@ -76,3 +78,41 @@ def dynamic_pricing(week, competitor_list):
         week_df_list.append(return_selected_week(df, week))
     comp_ads_ratio = strip_ads_only(week_df_list)
     return max(0.75, (min(comp_ads_ratio)) * (1-LOWER_PRICE))
+
+
+def process_current_week(schedule_df, movie_df):
+    schedule_df = schedule_df['content'].reset_index().groupby(['content']).first()
+    schedule_df.columns = ['aired_datetime']
+    schedule_df = schedule_df.reset_index()
+    schedule_df = schedule_df.merge(movie_df[['title']], left_on='content', right_on='title', how="right")
+    return schedule_df
+
+
+def update_schedule(schedule_df, past_schedule_df):
+    
+    past_schedule_df['latest_aired_datetime'] = np.where(~schedule_df['aired_datetime'].isnull(),
+                                                         schedule_df['aired_datetime'],
+                                                         past_schedule_df['latest_aired_datetime'])
+    return past_schedule_df
+
+
+def decay(lambda_rate, X):
+    return np.exp(-lambda_rate * X)
+
+
+def decay_view_penelty(estimate_view, latest_showing_date, current_date):
+    lambda_rate = 1/7
+    delta_week = np.ceil((current_date - latest_showing_date).dt.days / 7)
+    penalty = decay(lambda_rate, delta_week)
+    return penalty * estimate_view
+
+
+def get_date_from_week(week, year):
+    return pd.to_datetime(str(year)+str(week)+f'{DAY_OFFSET+1}',
+                   format='%Y%W%w')
+
+# past_schedule_df = movie_df.copy()
+# schedule_df = process_current_week(demo_week_1, movie_df)
+# past_schedule_df = update_schedule(schedule_df, past_schedule_df)
+# schedule_df = process_current_week(demo_week_2, movie_df)
+# past_schedule_df = update_schedule(schedule_df, past_schedule_df)

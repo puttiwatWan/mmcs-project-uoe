@@ -1,7 +1,15 @@
 import xpress as xp
 import pandas as pd
 from utils.data_processing import process_table, DEMOGRAPHIC_LIST, SLOT_DURATION
-from utils.schedule_processing import combine_schedule, consolidate_time_to_30_mins_slot, dynamic_pricing
+from utils.schedule_processing import (combine_schedule, 
+                                       consolidate_time_to_30_mins_slot, 
+                                       dynamic_pricing, 
+                                       return_selected_week, 
+                                       get_date_from_week, 
+                                       create_competitor_schedule, 
+                                       decay_view_penelty,
+                                       process_current_week,
+                                       update_schedule)
 from datetime import datetime as dt
 from IPython.display import display
 
@@ -49,6 +57,41 @@ combine_30min_df = combine_schedule(channel_a_30_schedule_df)
 
 ### Return Pricing for the week (first week is week 40)
 ads_price_per_view = dynamic_pricing(week=40, competitor_list=competitor_list)
+
+first_week = 40
+week_consider = 2
+all_schedule_df = movie_df.copy()
+all_schedule_df['latest_showing_date'] = pd.to_datetime('2000-01-01')
+last_week_schedule_df = return_selected_week(channel_a_schedule_df, 40) ### Dummy
+year = 2024
+
+for week in range(first_week, first_week + week_consider):
+
+    current_date = get_date_from_week(week, year)
+    this_week_competitor_list = [return_selected_week(comp, week) for comp in competitor_list]
+    ### Get competitor schedule
+    combine_schedule = create_competitor_schedule(this_week_competitor_list)
+
+    ### Create Modify DF for this week
+    current_adjusted_df = all_schedule_df.copy()
+    ### Cut all the same movie as competitor out
+    current_adjusted_df = current_adjusted_df[~current_adjusted_df['title'].isin(combine_schedule[0])]
+    ### Create Decay for popularity
+    current_adjusted_df['adjusted_popularity'] = current_adjusted_df['popularity'] - decay_view_penelty(
+        current_adjusted_df['popularity'], current_adjusted_df['latest_showing_date'], current_date)
+    
+    print(current_adjusted_df.head())
+    ### RUN XPRESS GET SCHEDULE
+    schedule_df = return_selected_week(channel_0_schedule_df, week)
+
+    ### Process current week schedule
+    schedule_df = process_current_week(schedule_df, movie_df)
+    #### Update Schedule for what has been schedule this time.
+    all_schedule_df = update_schedule(schedule_df, all_schedule_df)
+
+    last_week_schedule_df = schedule_df
+
+
 
 ######## --------------- ###################
 MAX_RUNTIME_MIN_PER_DAY = 17 * 60
