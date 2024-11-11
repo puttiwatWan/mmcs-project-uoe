@@ -1,5 +1,7 @@
 import pandas as pd
 
+DEMOGRAPHIC_LIST = ['children', 'adults', 'retirees']
+TOTAL_VIEW_COUNT = 1000000
 
 ### This script deal with so call "slot" #####
 
@@ -43,3 +45,20 @@ def create_competitor_schedule(channel_0_schedule_df, channel_1_schedule_df, cha
         combine_schedule.append(all_list)
 
     return combine_schedule
+
+
+def strip_ads_only(df_list):
+    ads_ratio = []
+    counter = 0
+    for df in df_list:
+        ads_df = df.loc[df['content'] == 'Advert']
+        sum_ad_price = ads_df['ad_slot_price'].sum()
+        print(f'Total ads price {sum_ad_price}')
+        total_expected_view = 0
+        for demographic in DEMOGRAPHIC_LIST:
+            total_expected_view = ads_df[[f'{demographic}_expected_view_count']].sum().values[0] + total_expected_view
+        print(f'Total expected view {total_expected_view * TOTAL_VIEW_COUNT}')
+        ads_ratio.append(sum_ad_price/ (total_expected_view* TOTAL_VIEW_COUNT))
+        print(f'The price per view of channel {counter} is {sum_ad_price/ (total_expected_view* TOTAL_VIEW_COUNT)}')
+        counter = counter + 1
+    return ads_ratio
