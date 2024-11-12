@@ -1,12 +1,13 @@
+import numpy as np
 import xpress as xp
 import pandas as pd
 from utils.data_processing import process_table, DEMOGRAPHIC_LIST, SLOT_DURATION
-from utils.schedule_processing import (combine_schedule, 
-                                       consolidate_time_to_30_mins_slot, 
-                                       dynamic_pricing, 
-                                       return_selected_week, 
-                                       get_date_from_week, 
-                                       create_competitor_schedule, 
+from utils.schedule_processing import (combine_schedule,
+                                       consolidate_time_to_30_mins_slot,
+                                       dynamic_pricing,
+                                       return_selected_week,
+                                       get_date_from_week,
+                                       create_competitor_schedule,
                                        decay_view_penelty,
                                        process_current_week,
                                        update_schedule)
@@ -79,7 +80,7 @@ for week in range(first_week, first_week + week_consider):
     ### Create Decay for popularity
     current_adjusted_df['adjusted_popularity'] = current_adjusted_df['popularity'] - decay_view_penelty(
         current_adjusted_df['popularity'], current_adjusted_df['latest_showing_date'], current_date)
-    
+
     print(current_adjusted_df.head())
     ### RUN XPRESS GET SCHEDULE
     schedule_df = return_selected_week(channel_0_schedule_df, week)
@@ -91,7 +92,13 @@ for week in range(first_week, first_week + week_consider):
 
     last_week_schedule_df = schedule_df
 
-
+# TODO: Get available ad slots for each competitors
+mock_comp_num = 3
+mock_time_slots = 34
+mock_days = 7
+comp_ad_slots = np.array([1 for i in range(mock_comp_num * mock_time_slots * mock_days)]).reshape(
+    mock_comp_num, mock_time_slots, mock_days
+)
 
 ######## --------------- ###################
 MAX_RUNTIME_MIN_PER_DAY = 17 * 60
@@ -123,10 +130,12 @@ end_time = scheduling.addVariables(number_of_movies, number_of_days, name='e', v
 #       xp.Sum(sold_ad_slots[i, t, c, d] for c in Buyers) == 0 (meaning no competitor bought that slot)
 sold_ad_slots = scheduling.addVariables(number_of_movies, number_of_time_slots, number_of_competitors, number_of_days,
                                         name="sa", vartype=xp.binary)
-# bought_ad_slots = scheduling.addVariables(number_of_movies, number_of_time_slots, number_of_competitors, number_of_days,
-#                                           name="ba", vartype=xp.binary)
+bought_ad_slots = scheduling.addVariables(number_of_movies, number_of_time_slots, number_of_competitors, number_of_days,
+                                          name="ba", vartype=xp.binary)
+# increased_viewers = scheduling.addVariables(number_of_time_slots, number_of_days, name="iv", vartype=xp.continuous)
 
 # Objective Function
+# TODO: Add bought ad slots into obj fn
 scheduling.setObjective(-xp.Sum(movie_df['license_fee'][i] * xp.Sum(movie[i, d] for d in Days) for i in Movies) +
                         xp.Sum(combine_30min_df[f"{demo}_prime_time_view_count"][t] *
                                movie_df[f"{demo}_scaled_popularity"][i] * sold_ad_slots[i, t, c, d]
@@ -160,8 +169,15 @@ scheduling.addConstraint(xp.Sum(sold_ad_slots[i, t, c, d] for c in Competitors) 
                          for i in Movies for d in Days for t in TimeSlots)
 
 # Bought ads constraints
-# scheduling.addConstraint(bought_ad_slots[i, t, c, d] <= 1
+# Can only buy available ad slots. comp_ad_slots[c, t, d] = 0 means that competitor has no ad in that time slot.
+scheduling.addConstraint(bought_ad_slots[i, t, c, d] <= comp_ad_slots[c, t, d]
+                         for i in Movies for c in Competitors for d in Days for t in TimeSlots)
+# TODO: Add a constraint for limiting the bought ad slot to be before the movie start time (below still does not work !)
+# scheduling.addConstraint(start_time[i, d] - (bought_ad_slots[i, t, c, d] * t) <= 4
 #                          for i in Movies for c in Competitors for d in Days for t in TimeSlots)
+# TODO: Add converted viewers constraint (conversion rate)
+# scheduling.addConstraint(increased_viewers[t, d] == conversion_rate
+#                          for t in TimeSlots for d in Days)
 
 # expect no duplicated movies within the number_of_days
 scheduling.addConstraint(xp.Sum(movie[i, d] for d in Days) <= 1 for i in Movies)
