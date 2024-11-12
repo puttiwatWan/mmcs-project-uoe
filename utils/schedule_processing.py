@@ -152,11 +152,13 @@ def get_date_from_week(week, year):
 
 def return_ads_30_mins(schedule, compare_index):
     '''
-    Return competitors ads in 30 mins time slots
+    Return list of df of competitors ads in 30 mins time slots daily
     '''
     mins_30 = schedule.loc[schedule['content_type']=='Advert']
     mins_30 = mins_30['ad_slot_price'].resample('30min').sum()
-    return mins_30[mins_30.index.isin(compare_index)]
+    mins_30 = mins_30[mins_30.index.isin(compare_index)]
+    days_df_list = [day_df for day_df in mins_30.groupby(mins_30.index.date)]
+    return days_df_list
 
 # past_schedule_df = movie_df.copy()
 # schedule_df = process_current_week(demo_week_1, movie_df)
