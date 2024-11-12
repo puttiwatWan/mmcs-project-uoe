@@ -10,10 +10,18 @@ LOWER_PRICE = 0.1
 ### This script deal with so call "slot" #####
 
 def consolidate_time_to_30_mins_slot(df: pd.DataFrame) -> pd.DataFrame:
+    '''
+    Resample dataframe to be 30 mins interval
+    '''
     return df.resample('30min').mean().dropna(axis=0, how='all')
 
 
 def combine_schedule(df_30min: pd.DataFrame) -> pd.DataFrame:
+    '''
+    Create a combine schedule multiply this with film popularity
+    (primetime * baseline)
+    to get E(view)
+    '''
     combine_30min = df_30min[['children_baseline_view_count',
                               'adults_baseline_view_count',
                               'retirees_baseline_view_count']] * df_30min[['prime_time_factor']].to_numpy()
@@ -25,10 +33,17 @@ def combine_schedule(df_30min: pd.DataFrame) -> pd.DataFrame:
 
 
 def create_competitor_schedule(competitor_list):
+    '''
+    Combine competitors schedule into a list week by week.
+    So if n weeks was sent, list of unique film with n lenght will be returned 
+    '''
 
     ### To use movie_df[~movie_df['title'].isin(combine_schedule[0])] where week 0
     def create_week_year(schedule, offset=DAY_OFFSET):
-
+        '''
+        Create week year in ISO format with optional offset day. 
+        Example 1 to make week start 1 day later than iso format
+        '''
         modify_index = schedule.index
         schedule['week'] = (modify_index - pd.Timedelta(offset, unit='D')).isocalendar().week
         schedule['year'] = modify_index.isocalendar().year
@@ -51,6 +66,9 @@ def create_competitor_schedule(competitor_list):
 
 
 def strip_ads_only(df_list):
+    '''
+    Calculate money per view of the ads of the competitors
+    '''
     ads_ratio = []
     counter = 0
     for df in df_list:
@@ -68,19 +86,33 @@ def strip_ads_only(df_list):
 
 
 def return_selected_week(df, week):
+    '''
+    Return sliced DF of a week requested  
+    '''
     mask = (df.index - pd.Timedelta(DAY_OFFSET, unit='D')).isocalendar().week == week
     return df.loc[mask.values]
 
 
 def dynamic_pricing(week, competitor_list):
+    '''
+    Dynamically calculate pricing for each week based on competitors
+    pricing, if will be LOWER_PRICE cheaper than the cheapest competitor.
+    But not lower than MIN PRICE.
+    Possible improvement think of probability lowest 1.0 of selling all the ads
+    0.8 for 2, 0.7 for 3 as priors than update after we got more informations.
+    Maybe can do it by Bayesian search?
+    '''
     week_df_list = []
     for df in competitor_list:
         week_df_list.append(return_selected_week(df, week))
     comp_ads_ratio = strip_ads_only(week_df_list)
-    return max(0.75, (min(comp_ads_ratio)) * (1-LOWER_PRICE))
+    return max(MIN_ADS_PRICE_PER_VIEW.75, (min(comp_ads_ratio)) * (1-LOWER_PRICE))
 
 
 def process_current_week(schedule_df, movie_df):
+    '''
+    Input current week schedule and process it to a more convenient form.
+    '''
     schedule_df = schedule_df['content'].reset_index().groupby(['content']).first()
     schedule_df.columns = ['aired_datetime']
     schedule_df = schedule_df.reset_index()
@@ -97,7 +129,7 @@ def update_schedule(schedule_df, past_schedule_df):
 
 
 def decay(lambda_rate, X):
-    return np.exp(-lambda_rate * X)
+    return np.exp(-lambda_rate * X) 
 
 
 def decay_view_penelty(estimate_view, latest_showing_date, current_date):
