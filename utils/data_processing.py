@@ -84,9 +84,10 @@ def process_table(movie_df: pd.DataFrame) -> pd.DataFrame:
     return movie_df
 
 
-def risk_view_functions(expected_view):
-
-    percentage = 0.80
+def risk_view_functions(expected_view, percentage):
+    '''
+    Create upper, lowerbound of actual view based on E(view) and percentage
+    '''
     z = st.norm.ppf((1+percentage) / 2)
     variance_factor = np.sqrt(1.5 * ((10)**(-1)))
     upper = expected_view + (expected_view * z * variance_factor)

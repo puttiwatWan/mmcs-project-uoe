@@ -10,7 +10,8 @@ from utils.schedule_processing import (combine_schedule,
                                        create_competitor_schedule,
                                        decay_view_penelty,
                                        process_current_week,
-                                       update_schedule)
+                                       update_schedule,
+                                       return_ads_30_mins)
 from datetime import datetime as dt
 from IPython.display import display
 
@@ -48,13 +49,23 @@ def import_data():
     return (mov_df, ch_0_conversion_rates_df, ch_1_conversion_rates_df, ch_2_conversion_rates_df, ch_a_schedule_df,
             ch_0_schedule_df, ch_1_schedule_df, ch_2_schedule_df)
 
-
+## Import Data
 (movie_df, channel_0_conversion_rates_df, channel_1_conversion_rates_df, channel_2_conversion_rates_df,
  channel_a_schedule_df, channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df) = import_data()
+
+## Process Data
 movie_df = process_table(movie_df)
+
+## Create DF needed in the models
 competitor_list = [channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df]
 channel_a_30_schedule_df = consolidate_time_to_30_mins_slot(channel_a_schedule_df)
 combine_30min_df = combine_schedule(channel_a_30_schedule_df)
+
+## Create ads slots price in 30 mins time slot of competitors
+comp_ads_slots = []
+for comp in competitor_list:
+    comp_ads_slots.appends(return_ads_30_mins(comp))
+
 
 ### Return Pricing for the week (first week is week 40)
 ads_price_per_view = dynamic_pricing(week=40, competitor_list=competitor_list)
@@ -66,6 +77,8 @@ all_schedule_df['latest_showing_date'] = pd.to_datetime('2000-01-01')
 last_week_schedule_df = return_selected_week(channel_a_schedule_df, 40) ### Dummy
 year = 2024
 
+
+## Weekly schedule
 for week in range(first_week, first_week + week_consider):
 
     current_date = get_date_from_week(week, year)
