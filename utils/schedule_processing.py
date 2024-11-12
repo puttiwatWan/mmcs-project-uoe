@@ -157,7 +157,7 @@ def return_ads_30_mins(schedule, compare_index):
     mins_30 = schedule.loc[schedule['content_type']=='Advert']
     mins_30 = mins_30['ad_slot_price'].resample('30min').sum()
     mins_30 = mins_30[mins_30.index.isin(compare_index)]
-    days_df_list = [day_df for day_df in mins_30.groupby(mins_30.index.date)]
+    days_df_list = [np.array(day_df[1].to_list()).astype(bool).astype(int) for day_df in mins_30.groupby(mins_30.index.date)]
     return days_df_list
 
 # past_schedule_df = movie_df.copy()
