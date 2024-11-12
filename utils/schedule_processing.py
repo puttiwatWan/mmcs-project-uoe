@@ -106,7 +106,7 @@ def dynamic_pricing(week, competitor_list):
     for df in competitor_list:
         week_df_list.append(return_selected_week(df, week))
     comp_ads_ratio = strip_ads_only(week_df_list)
-    return max(MIN_ADS_PRICE_PER_VIEW.75, (min(comp_ads_ratio)) * (1-LOWER_PRICE))
+    return max(MIN_ADS_PRICE_PER_VIEW, (min(comp_ads_ratio)) * (1-LOWER_PRICE))
 
 
 def process_current_week(schedule_df, movie_df):
