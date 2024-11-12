@@ -100,9 +100,9 @@ TOTAL_SLOTS = MAX_RUNTIME_MIN_PER_DAY / SLOT_DURATION
 number_of_movies = len(movie_df)
 Movies = range(number_of_movies)
 
-buyers = ["c1", "c2", "c3"]
-number_of_buyers = len(buyers)
-Ad_Buyers = range(number_of_buyers)
+competitors = ["c1", "c2", "c3"]
+number_of_competitors = len(competitors)
+Competitors = range(number_of_competitors)
 
 number_of_time_slots = (24 - 7) * 2  # 30 min each
 TimeSlots = range(number_of_time_slots)
@@ -120,19 +120,19 @@ start_time = scheduling.addVariables(number_of_movies, number_of_days, name='s',
 end_time = scheduling.addVariables(number_of_movies, number_of_days, name='e', vartype=xp.integer)
 
 # TODO: Buyers now only include competitors. If our ad slot is used for ourselves, we can check by
-#       xp.Sum(sold_ad_slots[i, t, b, d] for b in Buyers) == 0 (meaning no competitor bought that slot)
-sold_ad_slots = scheduling.addVariables(number_of_movies, number_of_time_slots, number_of_buyers, number_of_days,
+#       xp.Sum(sold_ad_slots[i, t, c, d] for c in Buyers) == 0 (meaning no competitor bought that slot)
+sold_ad_slots = scheduling.addVariables(number_of_movies, number_of_time_slots, number_of_competitors, number_of_days,
                                         name="sa", vartype=xp.binary)
-# bought_ad_slots = scheduling.addVariables(number_of_movies, number_of_time_slots, number_of_buyers, number_of_days,
+# bought_ad_slots = scheduling.addVariables(number_of_movies, number_of_time_slots, number_of_competitors, number_of_days,
 #                                           name="ba", vartype=xp.binary)
 
 # Objective Function
 scheduling.setObjective(-xp.Sum(movie_df['license_fee'][i] * xp.Sum(movie[i, d] for d in Days) for i in Movies) +
                         xp.Sum(combine_30min_df[f"{demo}_prime_time_view_count"][t] *
-                               movie_df[f"{demo}_scaled_popularity"][i] * sold_ad_slots[i, t, b, d]
-                               for i in Movies for t in TimeSlots for b in Ad_Buyers for d in Days
+                               movie_df[f"{demo}_scaled_popularity"][i] * sold_ad_slots[i, t, c, d]
+                               for i in Movies for t in TimeSlots for c in Competitors for d in Days
                                for demo in DEMOGRAPHIC_LIST),
-                        # xp.Sum(xp.Sum(ad_slots[i, t, b, d] for b in Ad_Buyers for d in Days for t in TimeSlots) *
+                        # xp.Sum(xp.Sum(ad_slots[i, t, c, d] for b in Ad_Buyers for d in Days for t in TimeSlots) *
                         #        movie_df['ad_slot_with_viewership'][i] for i in Movies),
                         sense=xp.maximize)
 
@@ -154,12 +154,14 @@ scheduling.addConstraint(xp.Sum(
     movie_df['total_time_slots'][i] * movie[i, d] for i in Movies) <= TOTAL_SLOTS for d in Days)
 
 # Sold ads constraints
-scheduling.addConstraint(xp.Sum(sold_ad_slots[i, t, b, d] for b in Ad_Buyers for t in TimeSlots) <= movie[i, d] *
+scheduling.addConstraint(xp.Sum(sold_ad_slots[i, t, c, d] for c in Competitors for t in TimeSlots) <= movie[i, d] *
                          movie_df['n_ad_breaks'][i] for i in Movies for d in Days)
-scheduling.addConstraint(xp.Sum(sold_ad_slots[i, t, b, d] for b in Ad_Buyers) <= movie_time[i, t, d]
+scheduling.addConstraint(xp.Sum(sold_ad_slots[i, t, c, d] for c in Competitors) <= movie_time[i, t, d]
                          for i in Movies for d in Days for t in TimeSlots)
 
 # Bought ads constraints
+# scheduling.addConstraint(bought_ad_slots[i, t, c, d] <= 1
+#                          for i in Movies for c in Competitors for d in Days for t in TimeSlots)
 
 # expect no duplicated movies within the number_of_days
 scheduling.addConstraint(xp.Sum(movie[i, d] for d in Days) <= 1 for i in Movies)
@@ -201,8 +203,8 @@ filtered_et_df.to_csv("out/end_time.csv")
 as_sol = scheduling.getSolution(sold_ad_slots)
 m, n, p, q = as_sol.shape
 as_sol = as_sol.reshape(m, n * q * p)
-slot_buyer_day_label = ['slot_{0}_buyer_{1}_day_{2}'.format(t, b, d)
-                        for t in TimeSlots for b in Ad_Buyers for d in Days]
+slot_buyer_day_label = ['slot_{0}_buyer_{1}_day_{2}'.format(t, c, d)
+                        for t in TimeSlots for c in Competitors for d in Days]
 as_df = pd.DataFrame(data=as_sol, index=movie_df['title'], columns=slot_buyer_day_label)
 filtered_as_df = (as_df[mdf.any(axis='columns')])
 filtered_as_df.to_csv('out/ad_slots.csv')
