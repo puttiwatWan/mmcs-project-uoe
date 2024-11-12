@@ -149,6 +149,15 @@ def get_date_from_week(week, year):
     return pd.to_datetime(str(year)+str(week)+f'{DAY_OFFSET+1}',
                    format='%Y%W%w')
 
+
+def return_ads_30_mins(schedule, compare_index):
+    '''
+    Return competitors ads in 30 mins time slots
+    '''
+    mins_30 = schedule.loc[schedule['content_type']=='Advert']
+    mins_30 = mins_30['ad_slot_price'].resample('30min').sum()
+    return mins_30[mins_30.index.isin(compare_index)]
+
 # past_schedule_df = movie_df.copy()
 # schedule_df = process_current_week(demo_week_1, movie_df)
 # past_schedule_df = update_schedule(schedule_df, past_schedule_df)

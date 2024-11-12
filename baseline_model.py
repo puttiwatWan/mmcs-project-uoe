@@ -64,7 +64,7 @@ combine_30min_df = combine_schedule(channel_a_30_schedule_df)
 ## Create ads slots price in 30 mins time slot of competitors
 comp_ads_slots = []
 for comp in competitor_list:
-    comp_ads_slots.appends(return_ads_30_mins(comp))
+    comp_ads_slots.append(return_ads_30_mins(comp))
 
 
 ### Return Pricing for the week (first week is week 40)
