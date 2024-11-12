@@ -121,6 +121,9 @@ def process_current_week(schedule_df, movie_df):
 
 
 def update_schedule(schedule_df, past_schedule_df):
+    '''
+    Update schedule df with current week schedule for "long term" storage.
+    '''
     
     past_schedule_df['latest_aired_datetime'] = np.where(~schedule_df['aired_datetime'].isnull(),
                                                          schedule_df['aired_datetime'],
@@ -129,10 +132,12 @@ def update_schedule(schedule_df, past_schedule_df):
 
 
 def decay(lambda_rate, X):
+    "Calculate an exponential decay function"
     return np.exp(-lambda_rate * X) 
 
 
 def decay_view_penelty(estimate_view, latest_showing_date, current_date):
+    "Calculate a penalty view for recently view films, currently set to calculate week by week"
     lambda_rate = 1/7
     delta_week = np.ceil((current_date - latest_showing_date).dt.days / 7)
     penalty = decay(lambda_rate, delta_week)
@@ -140,6 +145,7 @@ def decay_view_penelty(estimate_view, latest_showing_date, current_date):
 
 
 def get_date_from_week(week, year):
+    "Input week and year, then return date (with offset)"
     return pd.to_datetime(str(year)+str(week)+f'{DAY_OFFSET+1}',
                    format='%Y%W%w')
 
