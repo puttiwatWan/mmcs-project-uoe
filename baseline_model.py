@@ -1,3 +1,4 @@
+import numpy
 import numpy as np
 import xpress as xp
 import pandas as pd
@@ -15,7 +16,7 @@ from utils.schedule_processing import (combine_schedule,
 from datetime import datetime as dt
 from IPython.display import display
 
-xp.init('/Applications/FICO Xpress/xpressmp/bin/xpauth.xpr')
+# xp.init('/Applications/FICO Xpress/xpressmp/bin/xpauth.xpr')
 
 whole_st = dt.now()
 
@@ -60,12 +61,6 @@ movie_df = process_table(movie_df)
 competitor_list = [channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df]
 channel_a_30_schedule_df = consolidate_time_to_30_mins_slot(channel_a_schedule_df)
 combine_30min_df = combine_schedule(channel_a_30_schedule_df)
-
-## Create ads slots price in 30 mins time slot of competitors
-comp_ads_slots = []
-for comp in competitor_list:
-    comp_ads_slots.append(return_ads_30_mins(comp, channel_a_30_schedule_df.index))
-
 
 ### Return Pricing for the week (first week is week 40)
 ads_price_per_view = dynamic_pricing(week=40, competitor_list=competitor_list)
@@ -130,6 +125,12 @@ TimeSlots = range(number_of_time_slots)
 number_of_days = 1
 Days = range(number_of_days)
 
+## Create ads slots price in 30 mins time slot of competitors
+comp_ads_slots = []  # n_comp x n_days x n_time_slots
+for comp in competitor_list:
+    comp_ads_slots.append(return_ads_30_mins(comp, channel_a_30_schedule_df.index))
+comp_ads_slots = numpy.array(comp_ads_slots).reshape(number_of_competitors, number_of_days, number_of_time_slots)
+
 scheduling = xp.problem('scheduling')
 
 # Declare
@@ -183,7 +184,7 @@ scheduling.addConstraint(xp.Sum(sold_ad_slots[i, t, c, d] for c in Competitors) 
 
 # Bought ads constraints
 # Can only buy available ad slots. comp_ad_slots[c, t, d] = 0 means that competitor has no ad in that time slot.
-scheduling.addConstraint(bought_ad_slots[i, t, c, d] <= comp_ad_slots[c, t, d]
+scheduling.addConstraint(bought_ad_slots[i, t, c, d] <= comp_ads_slots[c, d, t]
                          for i in Movies for c in Competitors for d in Days for t in TimeSlots)
 # TODO: Add a constraint for limiting the bought ad slot to be before the movie start time (below still does not work !)
 # scheduling.addConstraint(start_time[i, d] - (bought_ad_slots[i, t, c, d] * t) <= 4

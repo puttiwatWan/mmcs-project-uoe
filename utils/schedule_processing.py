@@ -55,14 +55,14 @@ def create_competitor_schedule(competitor_list):
         df = create_week_year(df)
         unique_film_list.append(df.groupby(['week', 'year'])['content'].agg(['unique']))
         
-    combine_schedule = []
+    combined_schedule = []
     for week in range(unique_film_list[0].size):
         all_unique_list = []
         for channel in range(len(competitor_list)):
             all_unique_list = list(set(all_unique_list + (unique_film_list[channel]['unique'].to_list()[week].tolist())))
-        combine_schedule.append(all_unique_list)
+        combined_schedule.append(all_unique_list)
 
-    return combine_schedule
+    return combined_schedule
 
 
 def strip_ads_only(df_list):
@@ -158,7 +158,7 @@ def return_ads_30_mins(schedule, compare_index):
     mins_30 = mins_30['ad_slot_price'].resample('30min').sum()
     mins_30 = mins_30[mins_30.index.isin(compare_index)]
     days_df_list = [np.array(day_df[1].to_list()).astype(bool).astype(int) for day_df in mins_30.groupby(mins_30.index.date)]
-    return days_df_list
+    return days_df_list  # n_days x n_time_slots
 
 # past_schedule_df = movie_df.copy()
 # schedule_df = process_current_week(demo_week_1, movie_df)
