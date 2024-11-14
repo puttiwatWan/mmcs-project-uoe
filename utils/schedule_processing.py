@@ -1,13 +1,17 @@
 import numpy as np
 import pandas as pd
+import datetime
+from typing import TypeAlias, List, Tuple
 
 DEMOGRAPHIC_LIST = ['children', 'adults', 'retirees']
 TOTAL_VIEW_COUNT = 1000000
 DAY_OFFSET = 1
 MIN_ADS_PRICE_PER_VIEW = 0.75
 LOWER_PRICE = 0.1
+DateTimeIndexDF: TypeAlias = pd.DataFrame[pd.DatetimeIndex]
 
 ### This script deal with so call "slot" #####
+
 
 def consolidate_time_to_30_mins_slot(df: pd.DataFrame) -> pd.DataFrame:
     '''
@@ -38,14 +42,15 @@ def create_competitor_schedule(competitor_list):
     So if n weeks was sent, list of unique film with n lenght will be returned 
     '''
 
-    ### To use movie_df[~movie_df['title'].isin(combine_schedule[0])] where week 0
+    # To use movie_df[~movie_df['title'].isin(combine_schedule[0])] where week 0
     def create_week_year(schedule, offset=DAY_OFFSET):
         '''
         Create week year in ISO format with optional offset day. 
         Example 1 to make week start 1 day later than iso format
         '''
         modify_index = schedule.index
-        schedule['week'] = (modify_index - pd.Timedelta(offset, unit='D')).isocalendar().week
+        schedule['week'] = (
+            modify_index - pd.Timedelta(offset, unit='D')).isocalendar().week
         schedule['year'] = modify_index.isocalendar().year
         return schedule
 
@@ -53,13 +58,15 @@ def create_competitor_schedule(competitor_list):
     for df in competitor_list:
 
         df = create_week_year(df)
-        unique_film_list.append(df.groupby(['week', 'year'])['content'].agg(['unique']))
-        
+        unique_film_list.append(df.groupby(['week', 'year'])[
+                                'content'].agg(['unique']))
+
     combined_schedule = []
     for week in range(unique_film_list[0].size):
         all_unique_list = []
         for channel in range(len(competitor_list)):
-            all_unique_list = list(set(all_unique_list + (unique_film_list[channel]['unique'].to_list()[week].tolist())))
+            all_unique_list = list(set(
+                all_unique_list + (unique_film_list[channel]['unique'].to_list()[week].tolist())))
         combined_schedule.append(all_unique_list)
 
     return combined_schedule
@@ -77,10 +84,13 @@ def strip_ads_only(df_list):
         print(f'Total ads price {sum_ad_price}')
         total_expected_view = 0
         for demographic in DEMOGRAPHIC_LIST:
-            total_expected_view = ads_df[[f'{demographic}_expected_view_count']].sum().values[0] + total_expected_view
+            total_expected_view = ads_df[[f'{demographic}_expected_view_count']].sum(
+            ).values[0] + total_expected_view
         print(f'Total expected view {total_expected_view * TOTAL_VIEW_COUNT}')
-        ads_ratio.append(sum_ad_price/ (total_expected_view* TOTAL_VIEW_COUNT))
-        print(f'The price per view of channel {counter} is {sum_ad_price/ (total_expected_view* TOTAL_VIEW_COUNT)}')
+        ads_ratio.append(
+            sum_ad_price / (total_expected_view * TOTAL_VIEW_COUNT))
+        print(f'The price per view of channel {counter} is {
+              sum_ad_price / (total_expected_view * TOTAL_VIEW_COUNT)}')
         counter = counter + 1
     return ads_ratio
 
@@ -89,7 +99,8 @@ def return_selected_week(df, week):
     '''
     Return sliced DF of a week requested  
     '''
-    mask = (df.index - pd.Timedelta(DAY_OFFSET, unit='D')).isocalendar().week == week
+    mask = (df.index - pd.Timedelta(DAY_OFFSET, unit='D')
+            ).isocalendar().week == week
     return df.loc[mask.values]
 
 
@@ -113,10 +124,12 @@ def process_current_week(schedule_df, movie_df):
     '''
     Input current week schedule and process it to a more convenient form.
     '''
-    schedule_df = schedule_df['content'].reset_index().groupby(['content']).first()
+    schedule_df = schedule_df['content'].reset_index().groupby([
+        'content']).first()
     schedule_df.columns = ['aired_datetime']
     schedule_df = schedule_df.reset_index()
-    schedule_df = schedule_df.merge(movie_df[['title']], left_on='content', right_on='title', how="right")
+    schedule_df = schedule_df.merge(
+        movie_df[['title']], left_on='content', right_on='title', how="right")
     return schedule_df
 
 
@@ -124,7 +137,7 @@ def update_schedule(schedule_df, past_schedule_df):
     '''
     Update schedule df with current week schedule for "long term" storage.
     '''
-    
+
     past_schedule_df['latest_aired_datetime'] = np.where(~schedule_df['aired_datetime'].isnull(),
                                                          schedule_df['aired_datetime'],
                                                          past_schedule_df['latest_aired_datetime'])
@@ -133,7 +146,7 @@ def update_schedule(schedule_df, past_schedule_df):
 
 def decay(lambda_rate, X):
     "Calculate an exponential decay function"
-    return np.exp(-lambda_rate * X) 
+    return np.exp(-lambda_rate * X)
 
 
 def decay_view_penelty(estimate_view, latest_showing_date, current_date):
@@ -147,18 +160,23 @@ def decay_view_penelty(estimate_view, latest_showing_date, current_date):
 def get_date_from_week(week, year):
     "Input week and year, then return date (with offset)"
     return pd.to_datetime(str(year)+str(week)+f'{DAY_OFFSET+1}',
-                   format='%Y%W%w')
+                          format='%Y%W%w')
 
 
-def return_ads_30_mins(schedule, compare_index):
+def return_ads_30_mins(schedule: pd.DataFrame, compare_index: pd.DataFrame[pd.DatetimeIndex]) -> List[List[Tuple[datetime.date, int]]]:
     '''
-    Return list of df of competitors ads in 30 mins time slots daily
+    Return list of list of tuple (time_index, boolean whether ads slot exists)
     '''
-    mins_30 = schedule.loc[schedule['content_type']=='Advert']
+    original_index = schedule.loc[schedule['content_type'] == 'Advert'].index
+    mins_30 = schedule.loc[schedule['content_type'] == 'Advert']
     mins_30 = mins_30['ad_slot_price'].resample('30min').sum()
     mins_30 = mins_30[mins_30.index.isin(compare_index)]
-    days_df_list = [np.array(day_df[1].to_list()).astype(bool).astype(int) for day_df in mins_30.groupby(mins_30.index.date)]
-    return days_df_list  # n_days x n_time_slots
+    days_df_list = [np.array(day_df[1].to_list()).astype(bool).astype(
+        int) for day_df in mins_30.groupby(mins_30.index.date)]
+    index_list = [index_list for index_list in original_index.groupby(
+        original_index.date).values()]
+    return [[(x, y) for x, y in zip(sublist1, sublist2)] for sublist1, sublist2 in zip(index_list, days_df_list)]
+
 
 # past_schedule_df = movie_df.copy()
 # schedule_df = process_current_week(demo_week_1, movie_df)
