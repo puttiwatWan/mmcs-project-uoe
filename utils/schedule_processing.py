@@ -162,19 +162,54 @@ def get_date_from_week(week, year):
                           format='%Y%W%w')
 
 
-def return_ads_30_mins(schedule: pd.DataFrame, compare_index: List[datetime.datetime.date]) -> List[List[Tuple[datetime.date, int]]]:
+def return_ads_30_mins(schedule: pd.DataFrame, compare_index: pd.DataFrame.index) -> List[List[Tuple[datetime.date, int]]]:
     '''
     Return list of list of tuple (time_index, boolean whether ads slot exists)
     '''
+    # Get the indices where content_type is 'Advert'
     original_index = schedule.loc[schedule['content_type'] == 'Advert'].index
+    
+    # Create a dummy DataFrame
+    dummy_df = pd.DataFrame(index=original_index)
+    dummy_df['ads_slot_time'] = original_index
+    dummy_df = dummy_df.resample('30min').first()
+    # dummy_df = dummy_df.fillna(pd.Timedelta(seconds=0))
+    dummy_df = dummy_df[dummy_df.index.isin(compare_index)]
+    
+    # Resample and sum the ad slot prices
     mins_30 = schedule.loc[schedule['content_type'] == 'Advert']
     mins_30 = mins_30['ad_slot_price'].resample('30min').sum()
     mins_30 = mins_30[mins_30.index.isin(compare_index)]
-    days_df_list = [np.array(day_df[1].to_list()).astype(bool).astype(
-        int) for day_df in mins_30.groupby(mins_30.index.date)]
-    index_list = [index_list for index_list in original_index.groupby(
-        original_index.date).values()]
-    return [[(x, y) for x, y in zip(sublist1, sublist2)] for sublist1, sublist2 in zip(index_list, days_df_list)]
+    
+    # Create days_df_list
+    days_df_list = [
+        np.array(day_df.values).astype(bool).astype(int).reshape(-1)
+        for _, day_df in mins_30.groupby(mins_30.index.date)
+    ]
+    
+    # Create index_list
+    index_list = [
+        np.array(group.values).reshape(-1)
+        for _, group in dummy_df.groupby(dummy_df.index.date, dropna=False)
+    ]
+    
+    # Ensure both lists have the same lengths
+    if len(index_list) != len(days_df_list):
+        print("Mismatch in the number of days between index_list and days_df_list.")
+        # Handle the mismatch as needed
+        return []
+    print(np.array(index_list).shape)
+    print(np.array(days_df_list).shape)
+    
+    # Combine the lists
+    result = [
+        [(x, y) for x, y in zip(sublist1, sublist2)]
+        for sublist1, sublist2 in zip(index_list, days_df_list)
+    ]
+    
+    # Verify the shape
+    print(f"Shape of result: ({len(result)}, {len(result[0])})")
+    return result
 
 
 # past_schedule_df = movie_df.copy()
