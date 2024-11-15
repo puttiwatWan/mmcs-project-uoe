@@ -8,7 +8,6 @@ TOTAL_VIEW_COUNT = 1000000
 DAY_OFFSET = 1
 MIN_ADS_PRICE_PER_VIEW = 0.75
 LOWER_PRICE = 0.1
-DateTimeIndexDF: TypeAlias = pd.DataFrame[pd.DatetimeIndex]
 
 ### This script deal with so call "slot" #####
 
@@ -163,7 +162,7 @@ def get_date_from_week(week, year):
                           format='%Y%W%w')
 
 
-def return_ads_30_mins(schedule: pd.DataFrame, compare_index: pd.DataFrame[pd.DatetimeIndex]) -> List[List[Tuple[datetime.date, int]]]:
+def return_ads_30_mins(schedule: pd.DataFrame, compare_index: List[datetime.datetime.date]) -> List[List[Tuple[datetime.date, int]]]:
     '''
     Return list of list of tuple (time_index, boolean whether ads slot exists)
     '''
