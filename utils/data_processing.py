@@ -1,13 +1,9 @@
+import ast
 import pandas as pd
 import numpy as np
 import scipy.stats as st
 
-BASE_FEE = 10000
-PROFIT_MARGIN = 0.2
-BUDGET_FACTOR = 0.002
-BOX_OFFICE_REVENUE_FACTOR = 0.001
-DEMOGRAPHIC_LIST = ['children', 'adults', 'retirees']
-SLOT_DURATION = 30
+from config.config import *
 
 
 def create_licence_fee_vector(budget: pd.Series, revenue: pd.Series) -> pd.Series:
@@ -80,6 +76,8 @@ def process_table(movie_df: pd.DataFrame) -> pd.DataFrame:
                                                                   movie_df['total_expected_view_count'])
 
     movie_df['total_time_slots'] = movie_df['runtime_with_ads'] / SLOT_DURATION
+
+    movie_df["genres"] = movie_df["genres"].apply(ast.literal_eval)
 
     return movie_df
 
