@@ -1,8 +1,9 @@
-import numpy
 import numpy as np
 import xpress as xp
 import pandas as pd
-from utils.data_processing import process_table, DEMOGRAPHIC_LIST, SLOT_DURATION
+from itertools import chain
+from config.config import *
+from utils.data_processing import process_table, DEMOGRAPHIC_LIST
 from utils.schedule_processing import (combine_schedule,
                                        consolidate_time_to_30_mins_slot,
                                        dynamic_pricing,
@@ -14,6 +15,7 @@ from utils.schedule_processing import (combine_schedule,
                                        update_schedule,
                                        return_ads_30_mins)
 from datetime import datetime as dt
+from advert_conversion_rates import calculate_conversion_rate
 from IPython.display import display
 
 # xp.init('/Applications/FICO Xpress/xpressmp/bin/xpauth.xpr')
@@ -50,37 +52,38 @@ def import_data():
     return (mov_df, ch_0_conversion_rates_df, ch_1_conversion_rates_df, ch_2_conversion_rates_df, ch_a_schedule_df,
             ch_0_schedule_df, ch_1_schedule_df, ch_2_schedule_df)
 
-## Import Data
+
+# Import Data
 (movie_df, channel_0_conversion_rates_df, channel_1_conversion_rates_df, channel_2_conversion_rates_df,
  channel_a_schedule_df, channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df) = import_data()
 
-## Process Data
+# Process Data
 movie_df = process_table(movie_df)
+# movie_df = movie_df.head(100)
 
-## Create DF needed in the models
-competitor_list = [channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df]
+# Create DF needed in the models
+competitor_schedules = [channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df]
 channel_a_30_schedule_df = consolidate_time_to_30_mins_slot(channel_a_schedule_df)
 combine_30min_df = combine_schedule(channel_a_30_schedule_df)
 
-### Return Pricing for the week (first week is week 40)
-ads_price_per_view = dynamic_pricing(week=40, competitor_list=competitor_list)
+# Return Pricing for the week (first week is week 40)
+ads_price_per_view = dynamic_pricing(week=40, competitor_schedule_list=competitor_schedules)
 
-first_week = 40
-week_consider = 2
-all_schedule_df = movie_df.copy()
-all_schedule_df['latest_showing_date'] = pd.to_datetime('2000-01-01')
-last_week_schedule_df = return_selected_week(channel_a_schedule_df, 40) ### Dummy
-year = 2024
+# first_week = 40
+# week_considered = 2
+# all_schedule_df = movie_df.copy()
+# all_schedule_df['latest_showing_date'] = pd.to_datetime('2000-01-01')
+# last_week_schedule_df = return_selected_week(channel_a_schedule_df, 40)  # Dummy
+# year = 2024
 
-
-## Weekly schedule
-# for week in range(first_week, first_week + week_consider):
-
+# Weekly schedule
+# for week in range(first_week, first_week + week_considered):
+#
 #     current_date = get_date_from_week(week, year)
-#     this_week_competitor_list = [return_selected_week(comp, week) for comp in competitor_list]
+#     this_week_competitor_list = [return_selected_week(comp, week) for comp in competitor_schedules]
 #     ### Get competitor schedule
 #     combine_schedule = create_competitor_schedule(this_week_competitor_list)
-
+#
 #     ### Create Modify DF for this week
 #     current_adjusted_df = all_schedule_df.copy()
 #     ### Cut all the same movie as competitor out
@@ -88,52 +91,40 @@ year = 2024
 #     ### Create Decay for popularity
 #     current_adjusted_df['adjusted_popularity'] = current_adjusted_df['popularity'] - decay_view_penelty(
 #         current_adjusted_df['popularity'], current_adjusted_df['latest_showing_date'], current_date)
-
+#
 #     print(current_adjusted_df.head())
 #     ### RUN XPRESS GET SCHEDULE
 #     schedule_df = return_selected_week(channel_0_schedule_df, week)
-
+#
 #     ### Process current week schedule
 #     schedule_df = process_current_week(schedule_df, movie_df)
 #     #### Update Schedule for what has been schedule this time.
 #     all_schedule_df = update_schedule(schedule_df, all_schedule_df)
-
+#
 #     last_week_schedule_df = schedule_df
 
-# TODO: Get available ad slots for each competitors
-mock_comp_num = 3
-mock_time_slots = 34
-mock_days = 7
-comp_ad_slots = np.array([1 for i in range(mock_comp_num * mock_time_slots * mock_days)]).reshape(
-    mock_comp_num, mock_time_slots, mock_days
-)
 
-######## --------------- ###################
-MAX_RUNTIME_MIN_PER_DAY = 17 * 60
-TOTAL_SLOTS = MAX_RUNTIME_MIN_PER_DAY / SLOT_DURATION
-
+# -----------------------------------------
 number_of_movies = len(movie_df)
-Movies = range(number_of_movies)
-
-competitors = ["c1", "c2", "c3"]
-number_of_competitors = len(competitors)
-Competitors = range(number_of_competitors)
-
-number_of_time_slots = (24 - 7) * 2  # 30 min each
-TimeSlots = range(number_of_time_slots)
-
+number_of_competitors = len(COMPETITORS)
+number_of_time_slots = int((24 - 7) * 60 / SLOT_DURATION)  # 30 min each
 number_of_days = 1
+
+Movies = range(number_of_movies)
+Competitors = range(number_of_competitors)
+TimeSlots = range(number_of_time_slots)
 Days = range(number_of_days)
 
-## Create ads slots price in 30 mins time slot of competitors
-comp_ads_slots = []  # n_comp x n_days x n_time_slots
-for comp in competitor_list:
+# Create ads slots price in 30-min time slot for competitors
+comp_ads_slots = []  # n_comp x n_days x n_time_slots x tuple(datetime, 0|1)
+for comp in competitor_schedules:
     comp_ads_slots.append(return_ads_30_mins(comp, channel_a_30_schedule_df.index))
-# comp_ads_slots = numpy.array(comp_ads_slots).reshape(number_of_competitors, number_of_days, number_of_time_slots)
 
-scheduling = xp.problem('scheduling')
+# comp_ads_slots = np.array(comp_ads_slots).reshape(number_of_competitors, TOTAL_DAYS, number_of_time_slots, 2)
+all_genres = list(set(chain.from_iterable(movie_df["genres"])))
 
 # Declare
+scheduling = xp.problem('scheduling')
 movie = scheduling.addVariables(number_of_movies, number_of_days, name='m', vartype=xp.binary)
 movie_time = scheduling.addVariables(number_of_movies, number_of_time_slots, number_of_days, name="mt",
                                      vartype=xp.binary)
@@ -146,7 +137,8 @@ sold_ad_slots = scheduling.addVariables(number_of_movies, number_of_time_slots, 
                                         name="sa", vartype=xp.binary)
 bought_ad_slots = scheduling.addVariables(number_of_movies, number_of_time_slots, number_of_competitors, number_of_days,
                                           name="ba", vartype=xp.binary)
-# increased_viewers = scheduling.addVariables(number_of_time_slots, number_of_days, name="iv", vartype=xp.continuous)
+increased_viewers = scheduling.addVariables(number_of_time_slots, number_of_competitors, number_of_days,
+                                            name="iv", vartype=xp.continuous)
 
 # Objective Function
 # TODO: Add bought ad slots into obj fn
@@ -183,15 +175,19 @@ scheduling.addConstraint(xp.Sum(sold_ad_slots[i, t, c, d] for c in Competitors) 
                          for i in Movies for d in Days for t in TimeSlots)
 
 # Bought ads constraints
-# Can only buy available ad slots. comp_ad_slots[c, t, d] = 0 means that competitor has no ad in that time slot.
-scheduling.addConstraint(bought_ad_slots[i, t, c, d] <= comp_ads_slots[c, d, t]
+# Can only buy available ad slots. comp_ad_slots[c, t, d, 1] = 0 means that competitor has no ad in that time slot.
+scheduling.addConstraint(bought_ad_slots[i, t, c, d] <= comp_ads_slots[c][d][t][1]
                          for i in Movies for c in Competitors for d in Days for t in TimeSlots)
-# TODO: Add a constraint for limiting the bought ad slot to be before the movie start time (below still does not work !)
-# scheduling.addConstraint(start_time[i, d] - (bought_ad_slots[i, t, c, d] * t) <= 4
-#                          for i in Movies for c in Competitors for d in Days for t in TimeSlots)
+# A constraint for limiting the bought ad slot to be before the movie start time
+scheduling.addConstraint(start_time[i, d] + d * number_of_time_slots >=
+                         bought_ad_slots[i, t, c, d] * (t + d * number_of_time_slots + 4)
+                         for i in Movies for c in Competitors for d in Days for t in TimeSlots)
 # TODO: Add converted viewers constraint (conversion rate)
-# scheduling.addConstraint(increased_viewers[t, d] == conversion_rate
-#                          for t in TimeSlots for d in Days)
+# scheduling.addConstraint(increased_viewers[t, c, d] == bought_ad_slots[i, t, c, d] *
+#                          calculate_conversion_rate(competitor_schedules[c], movie_df, all_genres,
+#                                                    comp_ads_slots[c][d][t][0], movie_df["title"][i],
+#                                                    MAX_CONVERSION_RATE)
+#                          for i in Movies for t in TimeSlots for d in Days for c in Competitors)
 
 # expect no duplicated movies within the number_of_days
 scheduling.addConstraint(xp.Sum(movie[i, d] for d in Days) <= 1 for i in Movies)
@@ -202,6 +198,7 @@ scheduling.solve()
 print("===== Total time used to solve: {0} seconds".format((dt.now() - st).total_seconds()))
 
 # Printing
+# TODO: Add more printing and saving to files
 print(f"Objective value: {scheduling.getObjVal()}")
 
 days_labels = ['day_{0}'.format(d) for d in Days]
@@ -210,6 +207,7 @@ st = dt.now()
 mdf = pd.DataFrame(data=scheduling.getSolution(movie), index=movie_df['title'], columns=days_labels)
 filtered_mdf = mdf[mdf.any(axis='columns')]
 filtered_mdf.to_csv('out/movie.csv')
+# TODO: clear display
 # display(filtered_mdf)
 
 mt_sol = scheduling.getSolution(movie_time)
