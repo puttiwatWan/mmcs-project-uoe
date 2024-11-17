@@ -54,6 +54,10 @@ def calculate_conversion_rate(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
                               : watch a movie advertised to them.
     '''
 
+    if (ad_time_slot not in schedule_df.index or not schedule_df.loc[ad_time_slot].content_type == 'Advert' or
+       not movie_df.title.eq(movie_title).any()):
+        return 0
+
     assert ad_time_slot in schedule_df.index, "Selected time slot not found in index."
     assert schedule_df.loc[ad_time_slot].content_type == 'Advert', "Selected time slot is not an advert."
     assert movie_df.title.eq(movie_title).any(), "Selected movie not found in database."
@@ -73,14 +77,14 @@ def calculate_conversion_rate(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
     if len(previous_genres) > 0:
         overlap_scores.append(genre_overlap_score(tuple(previous_genres),
                                                   tuple(advertised_genres),
-                                                  all_movie_genres))
+                                                  tuple(all_movie_genres)))
     else:
         pass
 
     if len(next_genres) > 0:
         overlap_scores.append(genre_overlap_score(tuple(next_genres),
                                                   tuple(advertised_genres),
-                                                  all_movie_genres))
+                                                  tuple(all_movie_genres)))
     else:
         pass
 
