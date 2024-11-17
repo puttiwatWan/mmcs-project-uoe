@@ -92,3 +92,20 @@ def risk_view_functions(expected_view, percentage):
     lower = expected_view - (expected_view * z * variance_factor)
     return upper, lower
 
+
+def create_viable_meter(movie_df: pd.DataFrame) -> np.array:
+
+    demo_columns = [f'{demo}_expected_view_count' for demo in DEMOGRAPHIC_LIST]
+    demo_df = movie_df.loc[:,  demo_columns]
+    max_view = demo_df.max(axis=1).to_numpy()
+    mean_view = movie_df.loc[:, ['total_expected_view_count']].to_numpy().flatten()
+    licensing_fee = movie_df.loc[:, ['license_fee']].to_numpy().flatten()
+    
+    return (((max_view + mean_view) / 2)* TOTAL_VIEW_COUNT) - (licensing_fee)
+
+
+def top_n_viable_film(movie_df: pd.DataFrame, p: float=0.33) -> pd.DataFrame:
+    movie_df['viable_score'] = create_viable_meter(movie_df)
+    movie_df = movie_df.sort_values(['viable_score'], ascending=False)
+    return movie_df.head(int(p * len(movie_df)))
+

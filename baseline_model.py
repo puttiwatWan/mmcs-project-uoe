@@ -3,7 +3,9 @@ import xpress as xp
 import pandas as pd
 from itertools import chain
 from config.config import *
-from utils.data_processing import process_table, DEMOGRAPHIC_LIST
+from utils.data_processing import (process_table, 
+                                   DEMOGRAPHIC_LIST,
+                                   top_n_viable_film)
 from utils.schedule_processing import (combine_schedule,
                                        consolidate_time_to_30_mins_slot,
                                        dynamic_pricing,
@@ -71,6 +73,8 @@ combine_30min_df = combine_schedule(channel_a_30_schedule_df)
 
 # Return Pricing for the week (first week is week 40)
 ads_price_per_view = dynamic_pricing(week=40, competitor_schedule_list=competitor_schedules)
+
+movie_df = top_n_viable_film(movie_df, p=1.0)
 
 # first_week = 40
 # week_considered = 2
