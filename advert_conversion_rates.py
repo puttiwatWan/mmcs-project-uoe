@@ -4,20 +4,22 @@ from sklearn.metrics.pairwise import cosine_similarity
 from functools import cache
 
 
-def create_genre_vector(movie_genres: set[str], all_genres: list[str]) -> list[int]:
-    '''
+@cache
+def create_genre_vector(movie_genres: tuple[str], all_genres: tuple[str]) -> list[int]:
+    """
     "One hot encodes" the genres of a movie into the vector space of all
     possible genres.
-    '''
+    """
     
     return [1 if genre in movie_genres else 0 for genre in all_genres]
 
+
 @cache
-def genre_overlap_score(genre_set_A: set[str], genre_set_B: set[str], all_genres: list[str]) -> float:
-    '''
+def genre_overlap_score(genre_set_A: tuple[str], genre_set_B: tuple[str], all_genres: tuple[str]) -> float:
+    """
     Works out how similar two movies A & B are, based on the
     cosine similarity of their genre vectors.
-    '''
+    """
     genre_vec_A = create_genre_vector(movie_genres=genre_set_A, all_genres=all_genres)
     genre_vec_B = create_genre_vector(movie_genres=genre_set_B, all_genres=all_genres)
 
@@ -27,7 +29,7 @@ def genre_overlap_score(genre_set_A: set[str], genre_set_B: set[str], all_genres
 def calculate_conversion_rate(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
                               all_movie_genres: list[str], ad_time_slot: str,
                               movie_title: str, max_conversion_rate: float) -> float:
-    '''
+    """
     This works out how many people that are shown an advert for a movie
     will be likely to watch that movie.  This will depend on the current
     audience's tastes, i.e. is there an overlap between the genres of the
@@ -46,13 +48,13 @@ def calculate_conversion_rate(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
 
     :param schedule_df: Time-indexed pandas dataframe containing the tv schedule.
     :param movie_df: Pandas dataframe containing the movie data.
-    :param all_movie_genres: List of strings of all unique movie genres in database.   
+    :param all_movie_genres: List of strings of all unique movie genres in database.
     :param ad_time_slot: string representing timestamp of selected advert spot
                        : in YYYY-MM-DD HH:mm:SS format.
     :param movie_title: Title of the advertised movie.
     :param max_conversion_rate: Maximum expected fraction of audience that would
                               : watch a movie advertised to them.
-    '''
+    """
 
     if (ad_time_slot not in schedule_df.index or not schedule_df.loc[ad_time_slot].content_type == 'Advert' or
        not movie_df.title.eq(movie_title).any()):
@@ -89,28 +91,29 @@ def calculate_conversion_rate(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
         pass
 
     overlap_score = np.mean(overlap_scores)
-    stochastic_conversion_rate = np.clip(np.random.normal(loc=overlap_score, scale=0.1),
+    rng = np.random.default_rng()
+    stochastic_conversion_rate = np.clip(rng.normal(loc=overlap_score, scale=0.1),
                                          a_min=0.05, a_max=1.)
-    
+
     return stochastic_conversion_rate * max_conversion_rate
 
 
 def calculate_genre_conversion_rate(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
                                     all_movie_genres: list[str], ad_time_slot: str,
                                     advert_genre: str, max_conversion_rate: float) -> float:
-    '''
-    Similar to calculate_conversion_rate, but do individual genres for adverts 
+    """
+    Similar to calculate_conversion_rate, but do individual genres for adverts
     rather than a s
 
     :param schedule_df: Time-indexed pandas dataframe containing the tv schedule.
     :param movie_df: Pandas dataframe containing the movie data.
-    :param all_movie_genres: List of strings of all unique movie genres in database.   
+    :param all_movie_genres: List of strings of all unique movie genres in database.
     :param ad_time_slot: string representing timestamp of selected advert spot
                        : in YYYY-MM-DD HH:mm:SS format.
     :param advert_genre: Genre of the advertised movie.
     :param max_conversion_rate: Maximum expected fraction of audience that would
                               : watch a movie advertised to them.
-    '''
+    """
 
     assert ad_time_slot in schedule_df.index, "Selected time slot not found in index."
     assert schedule_df.loc[ad_time_slot].content_type == 'Advert', "Selected time slot is not an advert."
@@ -150,7 +153,7 @@ def calculate_genre_conversion_rate(schedule_df: pd.DataFrame, movie_df: pd.Data
 def calculate_ad_slot_price(schedule_df: pd.DataFrame, base_fee: float,
                             profit_margin: float, budget_factor: float,
                             box_office_factor: float) -> pd.Series:
-    '''
+    """
     Works out the cost required to buy a specific ad slot.  This is based on the time
     of day, and the budget/earnings of the movie being shown before the
     chosen ad slot.
@@ -178,7 +181,7 @@ def calculate_ad_slot_price(schedule_df: pd.DataFrame, base_fee: float,
                         : to the license fee.
     :param box_office_factor: What percent (in 0-1 scale) of the movie's box office renvenue
                             : contributes to the license fee.
-    '''
+    """
 
     license_fee = (base_fee
                    + (budget_factor * schedule_df.movie_budget)
