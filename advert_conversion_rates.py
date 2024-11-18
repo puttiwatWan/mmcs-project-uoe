@@ -191,3 +191,55 @@ def calculate_ad_slot_price(schedule_df: pd.DataFrame, base_fee: float,
     ad_slot_cost = (license_fee / schedule_df.n_ad_breaks) * schedule_df.prime_time_factor
 
     return np.round(ad_slot_cost, 2)
+
+
+def vectorize_cosine_sim(A: np.array, B: np.array) -> np.array:
+    '''
+    Create every cosine similarity between row ith of A matrix and row jth of B matrix.
+    Will resulting in i*j similarity pairs
+    '''
+    dot_prod = np.dot(A, B.T)
+    norms = np.outer(np.linalg.norm(A, axis=1), np.linalg.norm(B, axis=1))
+
+    return dot_prod / norms
+
+
+def preprocess_conversion_rate(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
+                               all_movie_genres: list[str], max_conversion_rate) -> np.array:
+
+    # Get previous and next genres based on schedule
+    prev_genres = schedule_df[(schedule_df['content_type'] == 'Advert').shift(-1).fillna(False)].merge(
+        movie_df, left_on='content', right_on='title', how='left').genres.apply(tuple)
+    next_genres = schedule_df[(schedule_df['content_type'] == 'Advert').shift(+1).fillna(False)].merge(
+        movie_df, left_on='content', right_on='title', how='left').genres.apply(tuple)
+
+    print("Creating prev/next vector")
+    # Convert to genre vectors
+    prev_genres_vector = np.stack(
+        prev_genres.apply(create_genre_vector, args=(tuple(all_movie_genres),)).values
+    )
+    next_genres_vector = np.stack(
+        next_genres.apply(create_genre_vector, args=(tuple(all_movie_genres),)).values
+    )
+
+    print("Creating movie vector")
+    # Create movie genres vector
+    movie_genres_vector = np.stack(
+        movie_df.genres.apply(tuple).apply(create_genre_vector, args=(tuple(all_movie_genres),)).values
+    )
+
+    ### Create similarity beween ads' movie and all movies
+    prev_genres_sim = vectorize_cosine_sim(prev_genres_vector, movie_genres_vector)
+    next_genres_sim = vectorize_cosine_sim(next_genres_vector, movie_genres_vector)
+    
+    genres_sim = (prev_genres_sim + next_genres_sim) / 2
+
+    ## 0 means random vars
+    z = np.random.normal(0, 0.1, size=(genres_sim.shape))
+    ## Shift with means
+    z_shift = z + genres_sim
+
+    stochastic_genres_sim = genres_sim * np.clip(genres_sim * z_shift, a_min=0.05, a_max=1)
+    
+    
+    return stochastic_genres_sim * max_conversion_rate

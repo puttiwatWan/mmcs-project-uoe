@@ -66,6 +66,7 @@ def process_table(movie_df: pd.DataFrame) -> pd.DataFrame:
     for demo in range(len(DEMOGRAPHIC_LIST)):
         movie_df[f'{DEMOGRAPHIC_LIST[demo]}_expected_view_count'] = demographic_view_list[demo]
 
+    movie_df = movie_df.drop_duplicates(subset="title")
     movie_df[f'total_expected_view_count'] = total_view_count
 
     movie_df['ad_slot_price'] = ad_slot_price(movie_df['license_fee'],
