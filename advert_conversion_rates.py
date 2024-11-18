@@ -5,13 +5,13 @@ from functools import cache
 
 
 @cache
-def create_genre_vector(movie_genres: tuple[str], all_genres: tuple[str]) -> list[int]:
+def create_genre_vector(movie_genres: tuple[str], all_genres: tuple[str]) -> np.array:
     """
     "One hot encodes" the genres of a movie into the vector space of all
     possible genres.
     """
     
-    return [1 if genre in movie_genres else 0 for genre in all_genres]
+    return np.array([1 if genre in movie_genres else 0 for genre in all_genres])
 
 
 @cache
@@ -191,3 +191,51 @@ def calculate_ad_slot_price(schedule_df: pd.DataFrame, base_fee: float,
     ad_slot_cost = (license_fee / schedule_df.n_ad_breaks) * schedule_df.prime_time_factor
 
     return np.round(ad_slot_cost, 2)
+
+
+def preprocess_conversion_rate(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
+                               all_movie_genres: list[str]) -> (np.array, np.array):
+
+    print("Entering function")
+    prev_genres = schedule_df[(schedule_df['content_type'] == 'Advert').shift(-1).fillna(False)].merge(
+        movie_df, left_on='content', right_on='title', how='left').genres.apply(tuple)
+    next_genres = schedule_df[(schedule_df['content_type'] == 'Advert').shift(+1).fillna(False)].merge(
+        movie_df, left_on='content', right_on='title', how='left').genres.apply(tuple)
+
+    print("Creating prev/next vector")
+    prev_genres_vector = prev_genres.apply(create_genre_vector, args=(tuple(all_movie_genres),)).values[np.newaxis, :]
+
+    next_genres_vector = next_genres.apply(create_genre_vector, args=(tuple(all_movie_genres),)).values[np.newaxis, :]
+
+    print("Creating movie vector")
+    movie_genres_vector = movie_df.genres.apply(tuple).apply(create_genre_vector, args=(tuple(all_movie_genres),))
+    movie_genres_vector = movie_genres_vector.values[:, np.newaxis]
+
+    def wrapped_cosine_similarity(a: np.array, b: np.array) -> float:
+        return cosine_similarity([a], [b])[0, 0]
+
+    print("Vectorizing function")
+    cosine_func = np.vectorize(wrapped_cosine_similarity)
+
+    from datetime import datetime as dt
+    print("Starting prev genres score")
+    st = dt.now()
+    prev_genres_score = cosine_func(movie_genres_vector, prev_genres_vector)
+    print("Total time used in cosine func for prev: ", (dt.now() - st).total_seconds())
+    print("Starting next genres score")
+    st = dt.now()
+    next_genres_score = cosine_func(movie_genres_vector, next_genres_vector)
+    print("Total time used in cosine func for next: ", (dt.now() - st).total_seconds())
+    print(prev_genres_score)
+    print(next_genres_score)
+
+    with open('prev_score.npy', 'wb') as f:
+        np.save(f, prev_genres_score)
+        np.save(f, next_genres_score)
+
+    with open('prev_score.txt', 'wb') as f:
+        np.save(f, prev_genres_score)
+        np.save(f, next_genres_score)
+
+    return
+
