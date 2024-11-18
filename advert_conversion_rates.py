@@ -194,27 +194,52 @@ def calculate_ad_slot_price(schedule_df: pd.DataFrame, base_fee: float,
 
 
 def vectorize_cosine_sim(A: np.array, B: np.array) -> np.array:
-    '''
+    """
     Create every cosine similarity between row ith of A matrix and row jth of B matrix.
-    Will resulting in i*j similarity pairs
-    '''
+
+    For each row, rA and rB, of A and B, the value is calculated using the formula
+    cosine_similarity = dot_product_of(rA, rB) / (norm(rA) * norm(rB))
+
+    :param A: A 2D matrix A containing vectors needed to find the similarity
+    :param B: A 2D matrix B containing vectors needed to combine with A to find the similarity
+
+    Return: An i * j dimension matrix of cosine similarity
+    """
+
     dot_prod = np.dot(A, B.T)
     norms = np.outer(np.linalg.norm(A, axis=1), np.linalg.norm(B, axis=1))
 
     return dot_prod / norms
 
 
-def preprocess_conversion_rate(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
-                               all_movie_genres: list[str], max_conversion_rate) -> np.array:
+def generate_conversion_rates(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
+                              all_movie_genres: list[str], max_conversion_rate: float) -> np.array:
+    """
+    Calculate all conversion rates for all combinations of movies and each
+    ad slot for a given schedule. This takes into account the audience's tastes,
+    i.e. how many genres are overlapped between the movies being advertised the
+    movies currently being shown. If the ad slot is at the end of a movie, the
+    interest is assumed to be an average of the two movies.
 
-    # Get previous and next genres based on schedule
+    This returns a stochastic value between 5-100% of the maximum conversion
+    rate, drawn from a normal distribution centred on the overlap score.
+
+    :param schedule_df: Time-indexed pandas dataframe containing the tv schedule.
+    :param movie_df: Pandas dataframe containing the movie data.
+    :param all_movie_genres: List of strings of all unique movie genres in database.
+    :param max_conversion_rate: Maximum expected fraction of audience that would
+                              : watch a movie advertised to them.
+
+    Return: An array of stochastic conversion rate between each movie and each ad slot
+    """
+
+    # Get genres of the movies before and after each ad slot based on the schedule
     prev_genres = schedule_df[(schedule_df['content_type'] == 'Advert').shift(-1).fillna(False)].merge(
         movie_df, left_on='content', right_on='title', how='left').genres.apply(tuple)
     next_genres = schedule_df[(schedule_df['content_type'] == 'Advert').shift(+1).fillna(False)].merge(
         movie_df, left_on='content', right_on='title', how='left').genres.apply(tuple)
 
-    print("Creating prev/next vector")
-    # Convert to genre vectors
+    # Convert genres to genres vectors
     prev_genres_vector = np.stack(
         prev_genres.apply(create_genre_vector, args=(tuple(all_movie_genres),)).values
     )
@@ -222,24 +247,22 @@ def preprocess_conversion_rate(schedule_df: pd.DataFrame, movie_df: pd.DataFrame
         next_genres.apply(create_genre_vector, args=(tuple(all_movie_genres),)).values
     )
 
-    print("Creating movie vector")
-    # Create movie genres vector
+    # Create all movies' genres vector
     movie_genres_vector = np.stack(
         movie_df.genres.apply(tuple).apply(create_genre_vector, args=(tuple(all_movie_genres),)).values
     )
 
-    ### Create similarity beween ads' movie and all movies
-    prev_genres_sim = vectorize_cosine_sim(prev_genres_vector, movie_genres_vector)
-    next_genres_sim = vectorize_cosine_sim(next_genres_vector, movie_genres_vector)
+    # Create similarity between ads' movie and all movies
+    prev_genres_score = vectorize_cosine_sim(prev_genres_vector, movie_genres_vector)
+    next_genres_score = vectorize_cosine_sim(next_genres_vector, movie_genres_vector)
     
-    genres_sim = (prev_genres_sim + next_genres_sim) / 2
+    genres_score = (prev_genres_score + next_genres_score) / 2
 
-    ## 0 means random vars
-    z = np.random.normal(0, 0.1, size=(genres_sim.shape))
-    ## Shift with means
-    z_shift = z + genres_sim
+    # Generate stochastic rate at the zero mean
+    # Firstly, create an array of stochastic rates with mean = 0. Then add these value to each genres score,
+    # meaning that the mean is shift to the genres score. Finally, clip the min and max value.
+    rng = np.random.default_rng()
+    shifter = rng.normal(0, 0.1, size=genres_score.shape)
+    stochastic_rate = np.clip(genres_score + shifter, a_min=0.05, a_max=1)
 
-    stochastic_genres_sim = genres_sim * np.clip(genres_sim * z_shift, a_min=0.05, a_max=1)
-    
-    
-    return stochastic_genres_sim * max_conversion_rate
+    return stochastic_rate * max_conversion_rate
