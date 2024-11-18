@@ -21,8 +21,6 @@ from datetime import datetime as dt
 from advert_conversion_rates import calculate_conversion_rate
 from IPython.display import display
 
-# xp.init('/Applications/FICO Xpress/xpressmp/bin/xpauth.xpr')
-
 whole_st = dt.now()
 
 
@@ -162,10 +160,14 @@ calculate_conversion_rate(competitor_schedules[0], movie_df, all_genres,
 print(number_of_days * number_of_competitors * number_of_movies * number_of_time_slots * 0.0094)
 print("===== Total time used to do conversion rate: {0} seconds".format((dt.now() - st).total_seconds()))
 
+# xp.init('/Applications/FICO Xpress/xpressmp/bin/xpauth.xpr')
+
 # Declare
 print("==== Starting Adding Var ====")
 st = dt.now()
+
 scheduling = xp.problem('scheduling')
+
 movie = scheduling.addVariables(number_of_movies, number_of_days, name='m', vartype=xp.binary)
 movie_time = scheduling.addVariables(number_of_movies, number_of_time_slots, number_of_days, name="mt",
                                      vartype=xp.binary)
@@ -206,6 +208,7 @@ scheduling.setObjective(-xp.Sum(movie_df['license_fee'][i] * xp.Sum(movie[i, d] 
 print("===== Total time used to add obj fn: {0} seconds".format((dt.now() - st).total_seconds()))
 
 print("==== Starting Constraints ====")
+st = dt.now()
 # Constraints
 scheduling.addConstraint(xp.Sum(movie_time[i, t, d] for i in Movies) == 1 for t in TimeSlots for d in Days)
 scheduling.addConstraint(xp.Sum(movie_time[i, t, d] for t in TimeSlots) ==
