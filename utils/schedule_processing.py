@@ -136,16 +136,62 @@ def update_schedule(schedule_df, past_schedule_df):
     return past_schedule_df
 
 
+def process_competitor_current_week(competitor_list_df, movie_df):
+    """
+    Input current week schedule and process it to a more convenient form.
+    """
+
+    all_competitor_dfs = []  # List to store temporary DataFrames
+    for comp in competitor_list_df:
+        temp = comp.copy()
+        temp = temp['content'].reset_index().groupby(['content']).first()
+        temp.columns = ['aired_datetime']
+        temp = temp.reset_index()
+        all_competitor_dfs.append(temp)  # Add temp DataFrame to the list
+
+    # Vertically stack all DataFrames using pd.concat
+    all_competitor_df = pd.concat(all_competitor_dfs, ignore_index=True)
+
+    # Merge with the movie DataFrame
+    all_competitor_df = all_competitor_df.merge(
+        movie_df[['title']], left_on='content', right_on='title', how="right"
+    )
+
+    # Sort by aired_datetime and drop duplicates
+    all_competitor_df = all_competitor_df.sort_values(by='aired_datetime', ascending=False)
+    all_competitor_df = all_competitor_df.drop_duplicates(subset=['title'], keep='first')
+
+    return all_competitor_df
+
+
+def update_schedule(schedule_df, competitor_schedule_df, past_schedule_df):
+    """
+    Update schedule df with current week schedule for "long term" storage.
+    """
+
+    past_schedule_df['latest_aired_datetime'] = np.where(~schedule_df['aired_datetime'].isnull(),
+                                                         schedule_df['aired_datetime'],
+                                                         past_schedule_df['latest_aired_datetime'])
+    past_schedule_df['comp_latest_aired_datetime'] = np.where(~competitor_schedule_df['aired_datetime'].isnull(),
+                                                        competitor_schedule_df['aired_datetime'],
+                                                        past_schedule_df['latest_aired_datetime'])
+    
+    return past_schedule_df
+
+
 def decay(lambda_rate, X):
     """Calculate an exponential decay function"""
     return np.exp(-lambda_rate * X)
 
 
-def decay_view_penelty(estimate_view, latest_showing_date, current_date):
+def decay_view_penelty(estimate_view, latest_showing_date, competitors_latest_showing_date, current_date):
     """Calculate a penalty view for recently view films, currently set to calculate week by week"""
-    lambda_rate = 1/7
-    delta_week = np.ceil((current_date - latest_showing_date).dt.days / 7)
-    penalty = decay(lambda_rate, delta_week)
+    lambda_rate = 1/4
+    competitors_rate = 1/2
+    delta_week = np.floor((current_date - latest_showing_date).dt.days / 7).to_numpy()
+    competitors_delta_week = np.floor((
+        current_date - competitors_latest_showing_date).dt.days / 7).to_numpy()
+    penalty = np.maximum(decay(lambda_rate, delta_week), decay(competitors_rate, competitors_delta_week))
     return penalty * estimate_view
 
 
