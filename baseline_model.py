@@ -2,14 +2,15 @@ import numpy as np
 import xpress as xp
 import pandas as pd
 from itertools import chain
-from config.config import (FIRST_WEEK,
-                           WEEK_CONSIDERED,
-                           YEAR,
-                           COMPETITORS,
-                           SLOT_DURATION,
+from config.config import (COMPETITORS,
+                           FIRST_WEEK,
                            MAX_CONVERSION_RATE,
-                           TOTAL_SLOTS)
-from utils.data_processing import (process_table, 
+                           MAX_RUNTIME,
+                           SLOT_DURATION,
+                           TOTAL_SLOTS,
+                           WEEK_CONSIDERED,
+                           YEAR)
+from utils.data_processing import (process_table,
                                    DEMOGRAPHIC_LIST,
                                    top_n_viable_film)
 from utils.schedule_processing import (combine_schedule,
@@ -69,6 +70,8 @@ print("===== Total time used to import data: {0} seconds".format((dt.now() - st)
 # Process Data
 movie_df = process_table(movie_df)
 # movie_df = movie_df.head(100)
+# Filter movies out
+movie_df = top_n_viable_film(movie_df, p=1.0)
 
 # Create DF needed in the models
 competitor_schedules = [channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df]
@@ -77,9 +80,6 @@ combine_30min_df = combine_schedule(channel_a_30_schedule_df)
 
 # Return Pricing for the week (first week is week 40)
 ads_price_per_view = dynamic_pricing(week=40, competitor_schedule_list=competitor_schedules)
-
-# Filter movies out
-movie_df = top_n_viable_film(movie_df, p=1.0)
 
 # Weekly schedule
 ## Initialized schedule
@@ -167,7 +167,6 @@ xp.init('/Applications/FICO Xpress/xpressmp/bin/xpauth.xpr')
 # Declare
 # Setting problem solving config
 scheduling = xp.problem('scheduling')
-# scheduling.setControl('maxtime', MAX_TIME)
 
 print(movie_df.columns)
 print("License fee is: ", movie_df['license_fee'].iloc[0])
@@ -285,6 +284,7 @@ scheduling.addConstraint(xp.Sum(bought_ad_slots[i, t, c, d] for t in TimeSlots f
 
 xp.setOutputEnabled(False)
 print("==== Starting Solving ====")
+scheduling.setControl('timelimit', MAX_RUNTIME)
 st = dt.now()
 scheduling.solve()
 print("===== Total time used to solve: {0} seconds".format((dt.now() - st).total_seconds()))
