@@ -2,7 +2,13 @@ import numpy as np
 import xpress as xp
 import pandas as pd
 from itertools import chain
-from config.config import *
+from config.config import (FIRST_WEEK,
+                           WEEK_CONSIDERED,
+                           YEAR,
+                           COMPETITORS,
+                           SLOT_DURATION,
+                           MAX_CONVERSION_RATE,
+                           TOTAL_SLOTS)
 from utils.data_processing import (process_table, 
                                    DEMOGRAPHIC_LIST,
                                    top_n_viable_film)
@@ -141,13 +147,14 @@ Days = range(number_of_days)
 print("==== Starting return_ads_30_mins ====")
 st = dt.now()
 # Create ads slots price in 30-min time slot for competitors
-comp_ads_slots = []  # n_comp x n_days x n_time_slots x tuple(datetime, 0|1)
-comp_ads_viewership = []  # n_comp x n_demo x n_days x n_time_slots
+comp_ads_slots = []  # np_array of dimension n_comp x n_days x n_time_slots x (0|1, ad_price)
+comp_ads_viewership = []  # np_array of dimension n_comp x n_demo x n_days x n_time_slots
 for comp in competitor_schedules:
-    # TODO: Refactor return_ads_30_mins to remove the index dimension
     ads, ad_viewership = return_ads_30_mins(comp, channel_a_30_schedule_df.index)
     comp_ads_slots.append(ads)
     comp_ads_viewership.append(ad_viewership)
+comp_ads_slots = np.array(comp_ads_slots)
+comp_ads_viewership = np.array(comp_ads_viewership)
 print("===== Total time used to return ads 30 min: {0} seconds".format((dt.now() - st).total_seconds()))
 
 # Generate the conversion for each movie and each ad slot.
@@ -159,9 +166,8 @@ xp.init('/Applications/FICO Xpress/xpressmp/bin/xpauth.xpr')
 
 # Declare
 # Setting problem solving config
-
 scheduling = xp.problem('scheduling')
-scheduling.setControl('maxtime', MAX_TIME)
+# scheduling.setControl('maxtime', MAX_TIME)
 
 print(movie_df.columns)
 print("License fee is: ", movie_df['license_fee'].iloc[0])
@@ -189,11 +195,11 @@ st = dt.now()
 # The objective is to maximize the profit gained from showing movies and selling ads.
 scheduling.setObjective(
     # First, deduct the licensing fee for each movie shown
-    -xp.Sum(movie_df['license_fee'].iloc[i] * xp.Sum(movie[i, d] for d in Days) for i in Movies) +
+    - xp.Sum(movie_df['license_fee'].iloc[i] * xp.Sum(movie[i, d] for d in Days) for i in Movies)
     # Next, add the profit from selling ads on our own channel
     # The profit is related to the estimated view count in each time slot. The view count from each demographic
     # is calculated and combined. Then the converted viewers from buying ads on the competitor's channels is added.
-    xp.Sum(
+    + xp.Sum(
         (
             xp.Sum(
                 combine_30min_df[f"{demo}_prime_time_view_count"].iloc[t] *
@@ -201,12 +207,12 @@ scheduling.setObjective(
             ) +
             increased_viewers[t, c, d]
         ) *
-        sold_ad_slots[i, t, c, d]
+        sold_ad_slots[i, t, c, d] * 1000000 * ads_price_per_view
         for i in Movies for t in TimeSlots for c in Competitors for d in Days
-    ) -
+    )
     # Finally, subtract the cost for buying ads on the competitor's channels.
-    xp.Sum(
-        xp.Sum(bought_ad_slots[i, t, c, d] for i in Movies) * comp_ads_slots[c][d][t][2]
+    - xp.Sum(
+        xp.Sum(bought_ad_slots[i, t, c, d] for i in Movies) * comp_ads_slots[c, d, t, 1]
         for t in TimeSlots for c in Competitors for d in Days
     ),
     sense=xp.maximize
@@ -215,56 +221,67 @@ print("===== Total time used to add obj fn: {0} seconds".format((dt.now() - st).
 
 print("==== Starting Constraints ====")
 st = dt.now()
-# Constraints
-scheduling.addConstraint(xp.Sum(movie_time[i, t, d] for i in Movies) == 1 for t in TimeSlots for d in Days)
+# ====== Constraints for selecting movies to be shown ======
+# At most one movie can be shown at a time
+scheduling.addConstraint(xp.Sum(movie_time[i, t, d] for i in Movies) <= 1 for t in TimeSlots for d in Days)
+# Ensure that each movie shown on a day covers the exact amount of time slots needed.
+# Note: movie_df['total_time_slots'] tells how many slots that movie takes when being shown.
 scheduling.addConstraint(xp.Sum(movie_time[i, t, d] for t in TimeSlots) ==
                          movie[i, d] * movie_df['total_time_slots'].iloc[i] for i in Movies for d in Days)
+# The sum of all time slots used to show movies on each day should not exceed the
+# total time slots available on each day.
+scheduling.addConstraint(xp.Sum(movie_df['total_time_slots'].iloc[i] * movie[i, d] for i in Movies) <=
+                         TOTAL_SLOTS for d in Days)
+# No duplicated movies within a number of days
+scheduling.addConstraint(xp.Sum(movie[i, d] for d in Days) <= 1 for i in Movies)
+print("===== Total time used to add constraints: {0} seconds".format((dt.now() - st).total_seconds()))
 
-# Schedule constraints
+# ====== Constraints for the start time and end time of a movie ======
+# The end time and start time of the movie should be the same as the time slots needed to show that movie.
+# Note: movie_df['total_time_slots'] tells how many slots that movie takes when being shown.
 scheduling.addConstraint(end_time[i, d] - start_time[i, d] ==
                          movie[i, d] * movie_df['total_time_slots'].iloc[i] for i in Movies for d in Days)
+# This constraint calculates the end time of a movie.
 scheduling.addConstraint(end_time[i, d] >= (t + 1) * movie_time[i, t, d]
                          for i in Movies for t in TimeSlots for d in Days)
+# This constraint calculates the start time of a movie.
 scheduling.addConstraint(start_time[i, d] <= t * movie_time[i, t, d] + (1 - movie_time[i, t, d]) * TOTAL_SLOTS
                          for i in Movies for t in TimeSlots for d in Days)
 
-# Total slots constraint
-scheduling.addConstraint(xp.Sum(
-    movie_df['total_time_slots'].iloc[i] * movie[i, d] for i in Movies) <= TOTAL_SLOTS for d in Days)
-
-# Sold ads constraints
+# ====== Constraints for selling ads ======
+# Each movie can sell the ad slots depending on how many ads are in the movie.
+# I.e. 10 ads can be sold to competitors during a movie if the movie has 10 ad breaks.
+# Note: movie_df["n_ad_breaks"] shows how many ad breaks are in each movie.
 scheduling.addConstraint(xp.Sum(sold_ad_slots[i, t, c, d] for c in Competitors for t in TimeSlots) <= movie[i, d] *
                          movie_df['n_ad_breaks'].iloc[i] for i in Movies for d in Days)
+# One ad break can be sold to only one competitor.
 scheduling.addConstraint(xp.Sum(sold_ad_slots[i, t, c, d] for c in Competitors) <= movie_time[i, t, d]
                          for i in Movies for d in Days for t in TimeSlots)
 
-# Bought ads constraints
-# Can only buy available ad slots. comp_ad_slots[c, t, d, 1] = 0 means that competitor has no ad in that time slot.
-scheduling.addConstraint(bought_ad_slots[i, t, c, d] <= comp_ads_slots[c][d][t][1]
+# ====== Constraints for buying ads ======
+# Can only buy available ad slots.
+# Note: comp_ad_slots[c, t, d, 0] = 1 means that competitor has an ad in that time slot, otherwise, 0.
+scheduling.addConstraint(bought_ad_slots[i, t, c, d] <= comp_ads_slots[c, d, t, 0]
                          for i in Movies for c in Competitors for d in Days for t in TimeSlots)
-# A constraint for limiting the bought ad slot to be before the movie start time
-scheduling.addConstraint(start_time[i, d] + d * number_of_time_slots >=
-                         bought_ad_slots[i, t, c, d] * (t + d * number_of_time_slots + 4)
+# The bought ad slot needs to be before the movie start time at least 4 time slots
+scheduling.addConstraint(start_time[i, d] + (d * number_of_time_slots) >=
+                         bought_ad_slots[i, t, c, d] * (t + (d * number_of_time_slots) + 4)
                          for i in Movies for c in Competitors for d in Days for t in TimeSlots)
-# Converted viewers calculation constraint (conversion rate)
+# Calculate the gained viewers from buying an ad.
+# The calculation is simply expected_viewership x conversion_rate.
 scheduling.addConstraint(increased_viewers[t, c, d] ==
                          xp.Sum(bought_ad_slots[i, t, c, d] *
-                                xp.Sum(comp_ads_viewership[c][demo][d][t] for demo, _ in enumerate(DEMOGRAPHIC_LIST)) *
+                                xp.Sum(comp_ads_viewership[c, demo, d, t] for demo, _ in enumerate(DEMOGRAPHIC_LIST)) *
                                 conversion_rates[i, d, t]for i in Movies)
                          for t in TimeSlots for d in Days for c in Competitors)
 # Each time slot can only be bought once
 scheduling.addConstraint(xp.Sum(bought_ad_slots[i, t, c, d] for i in Movies) <= 1
                          for t in TimeSlots for c in Competitors for d in Days)
-
 # Each movie can be advertised only once per each competitor
 scheduling.addConstraint(xp.Sum(bought_ad_slots[i, t, c, d] for t in TimeSlots for d in Days) <= 1
                          for i in Movies for c in Competitors)
 
 # TODO: If needed, add conversion rate when selling ad slots.
-
-# expect no duplicated movies within the number_of_days
-scheduling.addConstraint(xp.Sum(movie[i, d] for d in Days) <= 1 for i in Movies)
-print("===== Total time used to add constraints: {0} seconds".format((dt.now() - st).total_seconds()))
 
 xp.setOutputEnabled(False)
 print("==== Starting Solving ====")
@@ -274,9 +291,9 @@ print("===== Total time used to solve: {0} seconds".format((dt.now() - st).total
 
 # Printing
 
-best_bound = scheduling.getAttrib('bestbound')
-mip_gap = 100*((scheduling.getObjVal() - best_bound)/scheduling.getObjVal())
-print("The MIP gap is: ", mip_gap)
+# best_bound = scheduling.getAttrib('bestbound')
+# mip_gap = 100*((scheduling.getObjVal() - best_bound)/scheduling.getObjVal())
+# print("The MIP gap is: ", mip_gap)
 
 # TODO: Add more printing and saving to files
 print(f"Objective value: {scheduling.getObjVal()}")
@@ -287,8 +304,6 @@ st = dt.now()
 mdf = pd.DataFrame(data=scheduling.getSolution(movie), index=movie_df['title'], columns=days_labels)
 filtered_mdf = mdf[mdf.any(axis='columns')]
 filtered_mdf.to_csv('out/movie.csv')
-# TODO: clear display
-# display(filtered_mdf)
 
 mt_sol = scheduling.getSolution(movie_time)
 m, n, r = mt_sol.shape
@@ -297,16 +312,14 @@ slot_day_labels = ['slot_{0}_day_{1}'.format(t, d) for t in TimeSlots for d in D
 mt_df = pd.DataFrame(data=mt_sol, index=movie_df['title'], columns=slot_day_labels)
 filtered_mt_df = mt_df[mt_df.any(axis='columns')]
 filtered_mt_df.to_csv('out/movie_time.csv')
-# display(filtered_mt_df)
 
 st_df = pd.DataFrame(data=scheduling.getSolution(start_time), index=movie_df['title'], columns=days_labels)
 filtered_st_df = st_df[mdf.any(axis='columns')]
 filtered_st_df.to_csv("out/start_time.csv")
-# display(st_df[mdf.any(axis='columns')])
+
 et_df = pd.DataFrame(data=scheduling.getSolution(end_time), index=movie_df['title'], columns=days_labels)
 filtered_et_df = et_df[mdf.any(axis='columns')]
 filtered_et_df.to_csv("out/end_time.csv")
-# display(et_df[mdf.any(axis='columns')])
 
 as_sol = scheduling.getSolution(sold_ad_slots)
 m, n, p, q = as_sol.shape
@@ -335,6 +348,4 @@ filtered_iv_df = (iv_df[iv_df.any(axis='columns')])
 filtered_iv_df.to_csv('out/increase_viewers.csv')
 
 print("===== Total time used to get solutions into dataframe: {0} seconds".format((dt.now() - st).total_seconds()))
-
-print("===== Total time used for printing: {0} seconds".format((dt.now() - st).total_seconds()))
 print("===== Total time used for everything: {0} seconds".format((dt.now() - whole_st).total_seconds()))

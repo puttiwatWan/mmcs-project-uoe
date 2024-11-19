@@ -201,25 +201,15 @@ def get_date_from_week(week, year):
                           format='%Y%W%w')
 
 
-def return_ads_30_mins(schedule: pd.DataFrame, compare_index: pd.DataFrame.index) -> (
-        list[list[tuple[str, int, float]]], list[list[list[float]]]):
-    '''
+def return_ads_30_mins(schedule: pd.DataFrame, compare_index: pd.DataFrame.index) -> \
+        (list[list[tuple[int, float]]], list[list[list[float]]]):
+    """
     Return:
-        1. list of list of tuple (str_time_index, binary int whether ads slot exists, price for that ad slot)
+        1. list of list of tuple (binary int whether ads slot exists, price for that ad slot)
             dim = n_days x n_time_slots x tuple(str_datetime, 0|1, ad_price)
         2. list of list of list of float
             dim = n_demographic x n_days x n_time_slots
-    '''
-    # Get the indices where content_type is 'Advert'
-    original_index = schedule.loc[schedule['content_type'] == 'Advert'].index
-
-    # Create a dummy DataFrame
-    dummy_df = pd.DataFrame(index=original_index)
-    dummy_df['ads_slot_time'] = original_index
-    dummy_df = dummy_df.resample('30min').first()
-    # dummy_df = dummy_df.fillna(pd.Timedelta(seconds=0))
-    dummy_df = dummy_df[dummy_df.index.isin(compare_index)]
-
+    """
     ad_schedule = schedule.loc[schedule['content_type'] == 'Advert']
 
     # Resample and sum the ad slot prices
@@ -234,22 +224,13 @@ def return_ads_30_mins(schedule: pd.DataFrame, compare_index: pd.DataFrame.index
 
     ad_price_list = np.array(slot_price).reshape(TOTAL_DAYS, TOTAL_SLOTS)
     days_list = np.array(slot_price.astype(bool).astype(int)).reshape(TOTAL_DAYS, TOTAL_SLOTS)
-    index_list = dummy_df.ads_slot_time.apply(str).to_numpy().reshape(TOTAL_DAYS, TOTAL_SLOTS)
-
-    # Ensure both lists have the same lengths
-    if len(index_list) != len(days_list):
-        print("Mismatch in the number of days between index_list and days_df_list.")
-        # Handle the mismatch as needed
-        return []
 
     # Combine the lists
     ads = [
-        [(x, y, z) for x, y, z in zip(sublist1, sublist2, sublist3)]
-        for sublist1, sublist2, sublist3 in zip(index_list, days_list, ad_price_list)
+        [(x, y) for x, y in zip(sublist1, sublist2)]
+        for sublist1, sublist2 in zip(days_list, ad_price_list)
     ]
 
-    # Verify the shape
-    # print(f"Shape of result: ({len(result)}, {len(result[0])})")
     return ads, demo_viewership
 
 
