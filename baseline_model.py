@@ -314,7 +314,7 @@ as_sol = as_sol.reshape(m, n * q * p)
 slot_comp_day_label = ['slot_{0}_comp_{1}_day_{2}'.format(t, c, d)
                        for t in TimeSlots for c in Competitors for d in Days]
 as_df = pd.DataFrame(data=as_sol, index=movie_df['title'], columns=slot_comp_day_label)
-filtered_as_df = (as_df[mdf.any(axis='columns')])
+filtered_as_df = (as_df[as_df.any(axis='columns')])
 filtered_as_df.to_csv('out/sold_ad_slots.csv')
 
 bs_sol = scheduling.getSolution(bought_ad_slots)
@@ -323,16 +323,16 @@ bs_sol = bs_sol.reshape(m, n * q * p)
 slot_comp_day_label = ['slot_{0}_comp_{1}_day_{2}'.format(t, c, d)
                        for t in TimeSlots for c in Competitors for d in Days]
 bs_df = pd.DataFrame(data=bs_sol, index=movie_df['title'], columns=slot_comp_day_label)
-filtered_as_df = (bs_df[mdf.any(axis='columns')])
-filtered_as_df.to_csv('out/bought_ad_slots.csv')
+filtered_bs_df = (bs_df[bs_df.any(axis='columns')])
+filtered_bs_df.to_csv('out/bought_ad_slots.csv')
 
 iv_sol = scheduling.getSolution(increased_viewers)
 m, n, p = iv_sol.shape
 iv_sol = iv_sol.reshape(m * n, p)
 comp_slot_label = ['comp_{0}_slot_{1}'.format(c, t) for c in Competitors for t in TimeSlots ]
 iv_df = pd.DataFrame(data=iv_sol, index=comp_slot_label, columns=[f"Days_{i}" for i in Days])
-filtered_as_df = (iv_df[iv_df.any(axis='columns')])
-filtered_as_df.to_csv('out/increase_viewers.csv')
+filtered_iv_df = (iv_df[iv_df.any(axis='columns')])
+filtered_iv_df.to_csv('out/increase_viewers.csv')
 
 print("===== Total time used to get solutions into dataframe: {0} seconds".format((dt.now() - st).total_seconds()))
 
