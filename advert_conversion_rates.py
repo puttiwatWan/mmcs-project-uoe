@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 from functools import cache
+from config.config import TOTAL_DAYS, TOTAL_SLOTS
 
 
 @cache
@@ -227,10 +228,11 @@ def generate_conversion_rates(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
     :param schedule_df: Time-indexed pandas dataframe containing the tv schedule.
     :param movie_df: Pandas dataframe containing the movie data.
     :param all_movie_genres: List of strings of all unique movie genres in database.
-    :param max_conversion_rate: Maximum expected fraction of audience that would
-                              : watch a movie advertised to them.
+    :param max_conversion_rate: Maximum expected fraction of audience that would watch
+    a movie advertised to them.
 
-    Return: An array of stochastic conversion rate between each movie and each ad slot
+    :returns: An array of stochastic conversion rate between each movie and each ad slot.
+    The dimension is n_movies x n_days x n_ad_slots.
     """
 
     # Get genres of the movies before and after each ad slot based on the schedule
@@ -265,4 +267,15 @@ def generate_conversion_rates(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
     shifter = rng.normal(0, 0.1, size=genres_score.shape)
     stochastic_rate = np.clip(genres_score + shifter, a_min=0.05, a_max=1)
 
-    return stochastic_rate * max_conversion_rate
+    # Resample the time slot into an interval of 30 minutes and add missing time slots (i.e. time slot that has no ads).
+    # First, create a df using the date time on the schedule as an index.
+    # Then resample the whole dataframe into a 30-minute interval.
+    # Finally, transpose it and convert it into a numpy array of desired dimensions.
+    rate_df = pd.DataFrame(stochastic_rate * max_conversion_rate,
+                           index=schedule_df[(schedule_df['content_type'] == 'Advert')].index,
+                           columns=movie_df.title)
+    rates = rate_df.resample('30min').sum().between_time("07:00", "23:30").T.to_numpy().reshape(
+        len(movie_df), TOTAL_DAYS, TOTAL_SLOTS
+    )
+
+    return rates
