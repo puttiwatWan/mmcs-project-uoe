@@ -21,3 +21,5 @@ LOWER_PRICE = 0.1
 FIRST_WEEK = 40
 WEEK_CONSIDERED = 12
 YEAR = 2024
+
+MAX_TIME = 300  # max runtime in seconds
