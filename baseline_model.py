@@ -102,15 +102,15 @@ for week in range(FIRST_WEEK, FIRST_WEEK + WEEK_CONSIDERED):
     print(current_adjusted_df['latest_aired_datetime'].values)
     print(current_adjusted_df['comp_latest_aired_datetime'].values)
 
-    # a = np.floor((current_date - current_adjusted_df['latest_aired_datetime']).dt.days / 7).values
-    # b = np.floor((current_date - current_adjusted_df['latest_aired_datetime']).dt.days / 7).values
-    # print(np.max(a, b))
     ### Create Decay for popularity
+    current_adjusted_df['adjusted_popularity'] = current_adjusted_df['popularity']
     current_adjusted_df['adjusted_popularity'] = current_adjusted_df['popularity'] - decay_view_penelty(
         current_adjusted_df['popularity'], 
         current_adjusted_df['latest_aired_datetime'],
         current_adjusted_df['comp_latest_aired_datetime'], 
         current_date)
+    
+    current_adjusted_df.to_csv(f'out/current_adjusted_df_{week}.csv')
 
     ### RUN XPRESS GET SCHEDULE
     schedule_df = return_selected_week(channel_0_schedule_df, week)
@@ -131,6 +131,7 @@ for week in range(FIRST_WEEK, FIRST_WEEK + WEEK_CONSIDERED):
     all_schedule_df = update_schedule(schedule_df, competitor_schedule_df, all_schedule_df)
 
     last_week_schedule_df = schedule_df
+    all_schedule_df.to_csv(f'out/all_schedule_df_{week}.csv')
 
 
 # -----------------------------------------
@@ -162,7 +163,7 @@ print("===== Total time used to return ads 30 min: {0} seconds".format((dt.now()
 all_genres = list(set(chain.from_iterable(movie_df["genres"])))
 conversion_rates = generate_conversion_rates(competitor_schedules[0], movie_df, all_genres, MAX_CONVERSION_RATE)
 
-xp.init('/Applications/FICO Xpress/xpressmp/bin/xpauth.xpr')
+# xp.init('/Applications/FICO Xpress/xpressmp/bin/xpauth.xpr')
 
 # Declare
 # Setting problem solving config
@@ -170,6 +171,7 @@ scheduling = xp.problem('scheduling')
 
 print(movie_df.columns)
 print("License fee is: ", movie_df['license_fee'].iloc[0])
+
 
 print("==== Starting Adding Var ====")
 st = dt.now()
@@ -273,6 +275,8 @@ scheduling.addConstraint(increased_viewers[t, c, d] ==
                                 xp.Sum(comp_ads_viewership[c, demo, d, t] for demo, _ in enumerate(DEMOGRAPHIC_LIST)) *
                                 conversion_rates[i, d, t]for i in Movies)
                          for t in TimeSlots for d in Days for c in Competitors)
+
+
 # Each time slot can only be bought once
 scheduling.addConstraint(xp.Sum(bought_ad_slots[i, t, c, d] for i in Movies) <= 1
                          for t in TimeSlots for c in Competitors for d in Days)
@@ -282,21 +286,21 @@ scheduling.addConstraint(xp.Sum(bought_ad_slots[i, t, c, d] for t in TimeSlots f
 
 # TODO: If needed, add conversion rate when selling ad slots.
 
-xp.setOutputEnabled(False)
+xp.setOutputEnabled(True)
 print("==== Starting Solving ====")
-scheduling.setControl('timelimit', MAX_RUNTIME)
+scheduling.setControl('soltimelimit', MAX_RUNTIME)
 st = dt.now()
 scheduling.solve()
 print("===== Total time used to solve: {0} seconds".format((dt.now() - st).total_seconds()))
 
 # Printing
 
-# best_bound = scheduling.getAttrib('bestbound')
-# mip_gap = 100*((scheduling.getObjVal() - best_bound)/scheduling.getObjVal())
-# print("The MIP gap is: ", mip_gap)
-
 # TODO: Add more printing and saving to files
-print(f"Objective value: {scheduling.getObjVal()}")
+print(f"Objective value: {scheduling.attributes.objval}")
+print(f"Solve status: {scheduling.attributes.solvestatus}")
+best_bound = scheduling.getAttrib('bestbound')
+mip_gap = 100*((scheduling.getObjVal() - best_bound)/scheduling.getObjVal())
+print("The MIP gap is: ", mip_gap)
 
 days_labels = ['day_{0}'.format(d) for d in Days]
 time_slots_labels = ['slot_{0}'.format(t) for t in TimeSlots]
