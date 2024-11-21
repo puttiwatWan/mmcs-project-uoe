@@ -260,9 +260,9 @@ scheduling.addConstraint(xp.Sum(sold_ad_slots[i, t, c, d] for c in Competitors) 
                          for i in Movies for d in Days for t in TimeSlots)
 
 # ====== Constraints for buying ads ======
-# Can only buy available ad slots.
+# Can only buy available ad slots and only if the movie is going to be shown on the channel.
 # Note: comp_ad_slots[c, t, d, 0] = 1 means that competitor has an ad in that time slot, otherwise, 0.
-scheduling.addConstraint(bought_ad_slots[i, t, c, d] <= comp_ads_slots[c, d, t, 0]
+scheduling.addConstraint(bought_ad_slots[i, t, c, d] <= comp_ads_slots[c, d, t, 0] * movie[i, d]
                          for i in Movies for c in Competitors for d in Days for t in TimeSlots)
 # The bought ad slot needs to be before the movie start time at least 4 time slots
 scheduling.addConstraint(start_time[i, d] + (d * number_of_time_slots) >=
@@ -275,8 +275,6 @@ scheduling.addConstraint(increased_viewers[t, c, d] ==
                                 xp.Sum(comp_ads_viewership[c, demo, d, t] for demo, _ in enumerate(DEMOGRAPHIC_LIST)) *
                                 conversion_rates[i, d, t]for i in Movies)
                          for t in TimeSlots for d in Days for c in Competitors)
-
-
 # Each time slot can only be bought once
 scheduling.addConstraint(xp.Sum(bought_ad_slots[i, t, c, d] for i in Movies) <= 1
                          for t in TimeSlots for c in Competitors for d in Days)
