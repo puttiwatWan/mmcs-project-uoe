@@ -213,7 +213,7 @@ def vectorize_cosine_sim(A: np.array, B: np.array) -> np.array:
     return dot_prod / norms
 
 
-def generate_conversion_rates(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
+def generate_conversion_rates(schedule_df: pd.DataFrame, movie_df: pd.DataFrame, original_movie_df: pd.DataFrame,
                               all_movie_genres: list[str], max_conversion_rate: float) -> np.array:
     """
     Calculate all conversion rates for all combinations of movies and each
@@ -237,9 +237,9 @@ def generate_conversion_rates(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
 
     # Get genres of the movies before and after each ad slot based on the schedule
     prev_genres = schedule_df[(schedule_df['content_type'] == 'Advert').shift(-1).fillna(False)].merge(
-        movie_df, left_on='content', right_on='title', how='left').genres.apply(tuple)
+        original_movie_df, left_on='content', right_on='title', how='left').genres.apply(tuple)
     next_genres = schedule_df[(schedule_df['content_type'] == 'Advert').shift(+1).fillna(False)].merge(
-        movie_df, left_on='content', right_on='title', how='left').genres.apply(tuple)
+        original_movie_df, left_on='content', right_on='title', how='left').genres.apply(tuple)
 
     # Convert genres to genres vectors
     prev_genres_vector = np.stack(

@@ -67,11 +67,14 @@ st = dt.now()
  channel_a_schedule_df, channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df) = import_data()
 print("===== Total time used to import data: {0} seconds".format((dt.now() - st).total_seconds()))
 
+print(movie_df.columns)
 # Process Data
+
 movie_df = process_table(movie_df)
-# movie_df = movie_df.head(100)
-# Filter movies out
-movie_df = top_n_viable_film(movie_df, p=1.0)
+original_movie_df = movie_df.copy()
+movie_df = top_n_viable_film(movie_df, p=0.7)
+print(movie_df.head())
+print(movie_df.columns)
 
 # Create DF needed in the models
 competitor_schedules = [channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df]
@@ -103,12 +106,13 @@ for week in range(FIRST_WEEK, FIRST_WEEK + WEEK_CONSIDERED):
     print(current_adjusted_df['comp_latest_aired_datetime'].values)
 
     ### Create Decay for popularity
-    current_adjusted_df['adjusted_popularity'] = current_adjusted_df['popularity']
-    current_adjusted_df['adjusted_popularity'] = current_adjusted_df['popularity'] - decay_view_penelty(
-        current_adjusted_df['popularity'], 
-        current_adjusted_df['latest_aired_datetime'],
-        current_adjusted_df['comp_latest_aired_datetime'], 
-        current_date)
+    for demo in DEMOGRAPHIC_LIST:
+        penalty = decay_view_penelty(
+            current_adjusted_df[f'{demo}_scaled_popularity'], 
+            current_adjusted_df['latest_aired_datetime'],
+            current_adjusted_df['comp_latest_aired_datetime'], 
+            current_date).fillna(0)
+        current_adjusted_df[f'adjusted_{demo}_scaled_popularity'] = current_adjusted_df[f'{demo}_scaled_popularity'] - penalty
     
     current_adjusted_df.to_csv(f'out/current_adjusted_df_{week}.csv')
 
@@ -116,16 +120,16 @@ for week in range(FIRST_WEEK, FIRST_WEEK + WEEK_CONSIDERED):
     schedule_df = return_selected_week(channel_0_schedule_df, week)
 
     ### Get competitor schedule
-    competitor_list_df = []
+    competitor_current_list_df = []
     for comp in competitor_schedules:
         comp_schedule_df = return_selected_week(comp, week)
-        competitor_list_df.append(comp_schedule_df)
+        competitor_current_list_df.append(comp_schedule_df)
         
     ### Process current week schedule
     schedule_df = process_current_week(schedule_df, movie_df)
     
     ### Process current week competitor schedule
-    competitor_schedule_df = process_competitor_current_week(competitor_list_df, movie_df)
+    competitor_schedule_df = process_competitor_current_week(competitor_current_list_df, movie_df)
 
     #### Update Schedule for what has been schedule this time.
     all_schedule_df = update_schedule(schedule_df, competitor_schedule_df, all_schedule_df)
@@ -138,7 +142,9 @@ for week in range(FIRST_WEEK, FIRST_WEEK + WEEK_CONSIDERED):
 number_of_movies = len(movie_df)
 number_of_competitors = len(COMPETITORS)
 number_of_time_slots = int((24 - 7) * 60 / SLOT_DURATION)  # 30 min each
-number_of_days = 1
+number_of_days = 7
+
+M = 1 # Max Viewership gains
 
 Movies = range(number_of_movies)
 Competitors = range(number_of_competitors)
@@ -160,8 +166,8 @@ print("===== Total time used to return ads 30 min: {0} seconds".format((dt.now()
 
 # Generate the conversion for each movie and each ad slot.
 # The conversion_rates is of dimension (n_movies x n_days x n_ad_slot_30_min)
-all_genres = list(set(chain.from_iterable(movie_df["genres"])))
-conversion_rates = generate_conversion_rates(competitor_schedules[0], movie_df, all_genres, MAX_CONVERSION_RATE)
+all_genres = list(set(chain.from_iterable(original_movie_df["genres"])))
+conversion_rates = generate_conversion_rates(competitor_schedules[0], movie_df, original_movie_df, all_genres, MAX_CONVERSION_RATE)
 
 # xp.init('/Applications/FICO Xpress/xpressmp/bin/xpauth.xpr')
 
@@ -186,6 +192,9 @@ bought_ad_slots = scheduling.addVariables(number_of_movies, number_of_time_slots
                                           name="ba", vartype=xp.binary)
 increased_viewers = scheduling.addVariables(number_of_time_slots, number_of_competitors, number_of_days,
                                             name="iv", vartype=xp.continuous)
+z = scheduling.addVariables(number_of_movies, number_of_time_slots, number_of_competitors, number_of_days,
+                                        name="z", vartype=xp.continuous)
+
 print("===== Total time used to add var: {0} seconds".format((dt.now() - st).total_seconds()))
 
 # Objective Function
@@ -195,29 +204,35 @@ st = dt.now()
 # TODO: Multiply sold ad slots by some price
 # The objective is to maximize the profit gained from showing movies and selling ads.
 scheduling.setObjective(
-    # First, deduct the licensing fee for each movie shown
+    # Deduct the licensing fee for each movie shown
     - xp.Sum(movie_df['license_fee'].iloc[i] * xp.Sum(movie[i, d] for d in Days) for i in Movies)
-    # Next, add the profit from selling ads on our own channel
-    # The profit is related to the estimated view count in each time slot. The view count from each demographic
-    # is calculated and combined. Then the converted viewers from buying ads on the competitor's channels is added.
+    
+    # Add the profit from selling ads on our own channel
     + xp.Sum(
         (
+            # Profit from sold ad slots
             xp.Sum(
                 combine_30min_df[f"{demo}_prime_time_view_count"].iloc[t] *
                 movie_df[f"{demo}_scaled_popularity"].iloc[i] for demo in DEMOGRAPHIC_LIST
-            ) +
-            increased_viewers[t, c, d]
-        ) *
-        sold_ad_slots[i, t, c, d] * 1000000 * ads_price_per_view
+            )
+            * sold_ad_slots[i, t, c, d]  # Sold ad slots
+            * 1000000 * ads_price_per_view
+        )
+        + (
+            z[i, t, c, d]  # Auxiliary variable for increased viewers * sold ad slots
+            * 1000000 * ads_price_per_view
+        )
         for i in Movies for t in TimeSlots for c in Competitors for d in Days
     )
-    # Finally, subtract the cost for buying ads on the competitor's channels.
+    
+    # Subtract the cost for buying ads on the competitor's channels
     - xp.Sum(
         xp.Sum(bought_ad_slots[i, t, c, d] for i in Movies) * comp_ads_slots[c, d, t, 1]
         for t in TimeSlots for c in Competitors for d in Days
     ),
     sense=xp.maximize
 )
+
 print("===== Total time used to add obj fn: {0} seconds".format((dt.now() - st).total_seconds()))
 
 print("==== Starting Constraints ====")
@@ -235,7 +250,12 @@ scheduling.addConstraint(xp.Sum(movie_df['total_time_slots'].iloc[i] * movie[i, 
                          TOTAL_SLOTS for d in Days)
 # No duplicated movies within a number of days
 scheduling.addConstraint(xp.Sum(movie[i, d] for d in Days) <= 1 for i in Movies)
-print("===== Total time used to add constraints: {0} seconds".format((dt.now() - st).total_seconds()))
+
+# ====== Constraints for linearize increased_viewership
+scheduling.addConstraint(z[i, t, c, d] <= increased_viewers[t, c, d] for i in Movies for t in TimeSlots for c in Competitors for d in Days)
+scheduling.addConstraint(z[i, t, c, d] <= M * sold_ad_slots[i, t, c, d] for i in Movies for t in TimeSlots for c in Competitors for d in Days)
+scheduling.addConstraint(z[i, t, c, d] >= increased_viewers[t, c, d] - M * (1 - sold_ad_slots[i, t, c, d]) for i in Movies for t in TimeSlots for c in Competitors for d in Days)
+scheduling.addConstraint(z[i, t, c, d] >= 0 for i in Movies for t in TimeSlots for c in Competitors for d in Days)
 
 # ====== Constraints for the start time and end time of a movie ======
 # The end time and start time of the movie should be the same as the time slots needed to show that movie.
@@ -281,6 +301,8 @@ scheduling.addConstraint(xp.Sum(bought_ad_slots[i, t, c, d] for i in Movies) <= 
 # Each movie can be advertised only once per each competitor
 scheduling.addConstraint(xp.Sum(bought_ad_slots[i, t, c, d] for t in TimeSlots for d in Days) <= 1
                          for i in Movies for c in Competitors)
+
+print("===== Total time used to add constraints: {0} seconds".format((dt.now() - st).total_seconds()))
 
 # TODO: If needed, add conversion rate when selling ad slots.
 
