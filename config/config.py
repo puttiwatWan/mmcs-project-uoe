@@ -22,4 +22,5 @@ FIRST_WEEK = 40
 WEEK_CONSIDERED = 12
 YEAR = 2024
 
-MAX_RUNTIME = 1200  # max runtime in seconds
+MAX_HARD_LIMIT_RUNTIME = 30  # max runtime in seconds
+MAX_SOFT_LIMIT_RUNTIME = 1200  # max runtime in seconds

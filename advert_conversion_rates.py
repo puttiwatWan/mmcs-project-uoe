@@ -226,7 +226,9 @@ def generate_conversion_rates(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
     rate, drawn from a normal distribution centred on the overlap score.
 
     :param schedule_df: Time-indexed pandas dataframe containing the tv schedule.
-    :param movie_df: Pandas dataframe containing the movie data.
+    :param movie_df: Pandas dataframe containing only the top n selected movie data that
+    will be used to solve the problem.
+    :param original_movie_df: Pandas dataframe containing all movie data before trimming.
     :param all_movie_genres: List of strings of all unique movie genres in database.
     :param max_conversion_rate: Maximum expected fraction of audience that would watch
     a movie advertised to them.
