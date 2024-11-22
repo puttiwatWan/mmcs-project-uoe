@@ -234,6 +234,23 @@ def return_ads_30_mins(schedule: pd.DataFrame, compare_index: pd.DataFrame.index
     return ads, demo_viewership
 
 
+def resample_to_day_time(df):
+    # Extract 'day' and 'time' from the index
+    new_index = df.index
+    new_df = pd.DataFrame({
+        'day': new_index.date,   # Extract date (YYYY-MM-DD)
+        'time': new_index.time   # Extract time (HH:MM:SS)
+    })
+    
+    # Set MultiIndex on the new DataFrame
+    new_df = new_df.set_index(['day', 'time'])
+    
+    # Assign values from the original DataFrame, aligning by index
+    new_df = pd.DataFrame(df.values, index=new_df.index, columns=df.columns)
+    
+    return new_df
+
+
 # past_schedule_df = movie_df.copy()
 # schedule_df = process_current_week(demo_week_1, movie_df)
 # past_schedule_df = update_schedule(schedule_df, past_schedule_df)
