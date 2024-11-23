@@ -15,9 +15,8 @@ def create_licence_fee_vector(budget: pd.Series, revenue: pd.Series) -> pd.Serie
 
 
 def estimated_view_count(demographic_baseline: list[float],
-                         demographic_popularity: list[pd.Series],
-                         latest_showing_date=None,
-                         current_date=None) -> (list[pd.Series], int):
+                         demographic_popularity: list[pd.Series]
+                         ) -> (list[pd.Series], int):
     def estimate_view_count_calculation(baseline: float, popularity: pd.Series) -> pd.Series:
         return baseline*popularity
 
@@ -26,12 +25,6 @@ def estimated_view_count(demographic_baseline: list[float],
     for demographic in range(len(demographic_popularity)):
         demographic_expected_view_count = estimate_view_count_calculation(demographic_baseline[demographic],
                                                                           demographic_popularity[demographic])
-        # penalty = decay_view_penelty(demographic_expected_view_count,
-        #                     latest_showing_date,
-        #                     current_date)
-
-        # demographic_expected_view_count = demographic_expected_view_count - penalty
-
         total_view_count = total_view_count + demographic_expected_view_count
         demographic_view_list.append(demographic_expected_view_count)
 
@@ -84,9 +77,9 @@ def process_table(movie_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def risk_view_functions(expected_view, percentage):
-    '''
+    """
     Create upper, lowerbound of actual view based on E(view) and percentage
-    '''
+    """
     z = st.norm.ppf((1+percentage) / 2)
     variance_factor = np.sqrt(1.5 * ((10)**(-1)))
     upper = expected_view + (expected_view * z * variance_factor)
@@ -95,9 +88,9 @@ def risk_view_functions(expected_view, percentage):
 
 
 def create_viable_meter(movie_df: pd.DataFrame) -> np.array:
-    '''
+    """
     create a viability metrics for movies
-    '''
+    """
     demo_columns = [f'{demo}_expected_view_count' for demo in DEMOGRAPHIC_LIST]
     demo_df = movie_df.loc[:,  demo_columns]
     max_view = demo_df.max(axis=1).to_numpy()
@@ -108,9 +101,9 @@ def create_viable_meter(movie_df: pd.DataFrame) -> np.array:
 
 
 def top_n_viable_film(movie_df: pd.DataFrame, p: float=0.33) -> pd.DataFrame:
-    '''
-    Select top p * (movies) based on viability score. 
-    '''
+    """
+    Select top p * (movies) based on viability score.
+    """
     movie_df['viable_score'] = create_viable_meter(movie_df)
     movie_df = movie_df.sort_values(['viable_score'], ascending=False)
     return movie_df.head(int(p * len(movie_df)))

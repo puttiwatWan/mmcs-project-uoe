@@ -1,12 +1,10 @@
 import numpy as np
-import xpress as xp
 import pandas as pd
 from itertools import chain
 from config.config import (COMPETITORS,
                            FIRST_WEEK,
                            MAX_CONVERSION_RATE,
                            SLOT_DURATION,
-                           TOTAL_SLOTS,
                            WEEK_CONSIDERED,
                            YEAR)
 from utils.data_processing import (process_table,
@@ -26,9 +24,7 @@ from utils.schedule_processing import (combine_schedule,
 from datetime import datetime as dt
 from advert_conversion_rates import generate_conversion_rates
 
-from solver import Solver
-
-whole_st = dt.now()
+from solver import SchedulingSolver
 
 
 def import_data():
@@ -172,16 +168,13 @@ conversion_rates = generate_conversion_rates(competitor_schedules[0], movie_df, 
                                              MAX_CONVERSION_RATE)
 
 
-# xp.init('/Applications/FICO Xpress/xpressmp/bin/xpauth.xpr')
-
-
 def main():
-    solver = Solver(original_movie_df=original_movie_df,
-                    movie_df=movie_df,
-                    channel_a_30_schedule_df=channel_a_30_schedule_df,
-                    competitor_schedules=competitor_schedules,
-                    number_of_days=number_of_days,
-                    )
+    solver = SchedulingSolver(original_movie_df=original_movie_df,
+                              movie_df=movie_df,
+                              channel_a_30_schedule_df=channel_a_30_schedule_df,
+                              competitor_schedules=competitor_schedules,
+                              number_of_days=number_of_days,
+                              )
 
     solver.run(set_hard_limit=True)
 

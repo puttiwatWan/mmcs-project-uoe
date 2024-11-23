@@ -204,9 +204,9 @@ def get_date_from_week(week, year):
 def return_ads_30_mins(schedule: pd.DataFrame, compare_index: pd.DataFrame.index) -> \
         (list[list[tuple[int, float]]], list[list[list[float]]]):
     """
-    Return:
+    :returns:
         1. list of list of tuple (binary int whether ads slot exists, price for that ad slot)
-            dim = n_days x n_time_slots x tuple(str_datetime, 0|1, ad_price)
+            dim = n_days x n_time_slots x tuple(str_datetime, 0|1, ad_price) <br>
         2. list of list of list of float
             dim = n_demographic x n_days x n_time_slots
     """
@@ -235,10 +235,10 @@ def return_ads_30_mins(schedule: pd.DataFrame, compare_index: pd.DataFrame.index
 
 
 def resample_to_day_time(df: pd.DataFrame) -> pd.DataFrame:
-    '''
-    Input a dataframe that has datetime as an index then return a same 
+    """
+    Input a dataframe that has datetime as an index then return a same
     DataFrame with MultiIndex with time and day.
-    '''
+    """
     # Extract 'day' and 'time' from the index
     new_index = df.index
     new_df = pd.DataFrame({

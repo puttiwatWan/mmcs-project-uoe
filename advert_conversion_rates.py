@@ -197,14 +197,15 @@ def calculate_ad_slot_price(schedule_df: pd.DataFrame, base_fee: float,
 def vectorize_cosine_sim(A: np.array, B: np.array) -> np.array:
     """
     Create every cosine similarity between row ith of A matrix and row jth of B matrix.
+    <br><br>
 
     For each row, rA and rB, of A and B, the value is calculated using the formula
     cosine_similarity = dot_product_of(rA, rB) / (norm(rA) * norm(rB))
+    <br><br>
 
     :param A: A 2D matrix A containing vectors needed to find the similarity
     :param B: A 2D matrix B containing vectors needed to combine with A to find the similarity
-
-    Return: An i * j dimension matrix of cosine similarity
+    :returns: An i * j dimension matrix of cosine similarity
     """
 
     dot_prod = np.dot(A, B.T)
@@ -221,9 +222,11 @@ def generate_conversion_rates(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
     i.e. how many genres are overlapped between the movies being advertised the
     movies currently being shown. If the ad slot is at the end of a movie, the
     interest is assumed to be an average of the two movies.
+    <br><br>
 
     This returns a stochastic value between 5-100% of the maximum conversion
     rate, drawn from a normal distribution centred on the overlap score.
+    <br><br>
 
     :param schedule_df: Time-indexed pandas dataframe containing the tv schedule.
     :param movie_df: Pandas dataframe containing only the top n selected movie data that
