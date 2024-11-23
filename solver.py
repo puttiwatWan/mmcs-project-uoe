@@ -12,7 +12,8 @@ from config.config import (COMPETITORS,
                            MAX_HARD_LIMIT_RUNTIME,
                            MAX_SOFT_LIMIT_RUNTIME,
                            SLOT_DURATION,
-                           TOTAL_SLOTS)
+                           TOTAL_SLOTS,
+                           TOTAL_VIEW_COUNT)
 from utils.schedule_processing import (combine_schedule,
                                        dynamic_pricing,
                                        return_ads_30_mins)
@@ -224,7 +225,7 @@ class SchedulingSolver:
                         self.movie_df[f"{demo}_scaled_popularity"].iloc[i] for demo in DEMOGRAPHIC_LIST
                     )
                     * self.sold_ad_slots[i, t, c, d]  # Sold ad slots
-                    * 1000000 * self.ads_price_per_view
+                    * TOTAL_VIEW_COUNT * self.ads_price_per_view
                 )
                 + (
                     # Profit from ad slots sold from increased_viewers
@@ -233,7 +234,7 @@ class SchedulingSolver:
                     # The increased viewers is calculated from the conversion rates of each competitor view count
                     # on that ad slot.
                     self.z[i, t, c, d]  # Auxiliary variable for increased viewers * sold ad slots.
-                    * 1000000 * self.ads_price_per_view
+                    * TOTAL_VIEW_COUNT * self.ads_price_per_view
                 )
                 for i in self.Movies for t in self.TimeSlots for c in self.Competitors for d in self.Days
             )
