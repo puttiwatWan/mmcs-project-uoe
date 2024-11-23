@@ -3,7 +3,13 @@ import pandas as pd
 import numpy as np
 import scipy.stats as st
 
-from config.config import *
+from config.config import (BASE_FEE,
+                           BUDGET_FACTOR,
+                           BOX_OFFICE_REVENUE_FACTOR,
+                           PROFIT_MARGIN,
+                           DEMOGRAPHIC_LIST,
+                           SLOT_DURATION,
+                           TOTAL_VIEW_COUNT)
 
 
 def create_licence_fee_vector(budget: pd.Series, revenue: pd.Series) -> pd.Series:

@@ -1,11 +1,9 @@
-import numpy as np
 import pandas as pd
-from itertools import chain
 from config.config import (DAYS_PER_SOLVE,
                            FIRST_WEEK,
                            WEEK_CONSIDERED,
                            YEAR)
-from solver import SchedulingSolver
+from solver.solver import SchedulingSolver
 from utils.data_processing import (process_table,
                                    DEMOGRAPHIC_LIST,
                                    top_n_viable_film)

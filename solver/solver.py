@@ -5,7 +5,6 @@ import xpress as xp
 from datetime import datetime as dt
 from itertools import chain
 
-from advert_conversion_rates import generate_conversion_rates
 from config.config import (COMPETITORS,
                            DEMOGRAPHIC_LIST,
                            MAX_CONVERSION_RATE,
@@ -14,6 +13,7 @@ from config.config import (COMPETITORS,
                            SLOT_DURATION,
                            TOTAL_SLOTS,
                            TOTAL_VIEW_COUNT)
+from utils.advert_conversion_rates import generate_conversion_rates
 from utils.schedule_processing import (combine_schedule,
                                        dynamic_pricing,
                                        return_ads_30_mins)
@@ -91,7 +91,7 @@ class SchedulingSolver:
         self.z = None
 
         # OUT_PATH is the base path for output files.
-        self.OUT_PATH = "out"
+        self.OUT_PATH = "../out"
         # out_subfolder is the subfolder to store the output file
         self.out_subfolder = ""
         # MIP_GAP will be printed when the soft or hard limit is set.

@@ -1,8 +1,14 @@
 import numpy as np
 import pandas as pd
-from config.config import *
+from config.config import (DAY_OFFSET,
+                           DEMOGRAPHIC_LIST,
+                           LOWER_PRICE,
+                           MIN_ADS_PRICE_PER_VIEW,
+                           TOTAL_DAYS,
+                           TOTAL_SLOTS,
+                           TOTAL_VIEW_COUNT)
 
-# This script deal with so called "slot" #####
+# This script deal with so called "slot" #
 
 
 def consolidate_time_to_30_mins_slot(df: pd.DataFrame) -> pd.DataFrame:
