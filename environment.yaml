@@ -8,4 +8,5 @@ dependencies:
   - pandas
   - notebook
   - xpress=9.4.2
+  - spyder
 prefix: /usr/local/anaconda3/envs/Xpress
