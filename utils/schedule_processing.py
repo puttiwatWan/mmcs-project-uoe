@@ -255,5 +255,43 @@ def resample_to_day_time(df: pd.DataFrame) -> pd.DataFrame:
     return new_df
 
 
+# Corrected function to ensure rows with no active slots are included as None
+def de_one_hot_columns_include_empty_slots(df, datetime_index):
+    """
+    De-one-hot the slot columns, associating times with titles, and including rows with None for inactive slots.
+
+    Args:
+    df (pd.DataFrame): The dataframe containing one-hot encoded columns.
+    datetime_index (pd.DatetimeIndex): The datetime index to map slots to times.
+
+    Returns:
+    pd.DataFrame: A DataFrame with "time" and "title" columns, including rows with None for inactive slots.
+    """
+    # Adjust datetime index to match the slot columns
+    adjusted_index = datetime_index[: df.shape[1] - 1]
+    
+    # Rename columns using the adjusted datetime index
+    df.columns = ["title"] + list(adjusted_index)
+    
+    # Create a list to hold the results
+    result = []
+    
+    # Iterate over the datetime index
+    for time in adjusted_index:
+        # Check each movie for the specific time slot
+        empty = True  # Assume the slot is empty
+        for _, row in df.iterrows():
+            title = row["title"]
+            if row[time] > 0:  # Active slot
+                result.append({"time": time, "title": title})
+                empty = False
+        if empty:  # If no movies are active for this slot
+            result.append({"time": time, "title": None})
+    
+    # Convert the results to a DataFrame
+    return pd.DataFrame(result)
+
+
+
 
 
