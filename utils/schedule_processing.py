@@ -261,8 +261,20 @@ def resample_to_day_time(df: pd.DataFrame) -> pd.DataFrame:
     return new_df
 
 
+def sort_df_by_slot_day(df:pd.DataFrame) -> df:pd.DataFrame:
+    """
+    Sort DataFrame columns by days and slots then return the sorted DataFrame.
+    """
+
+    sorted_columns = (sorted(df.columns[1:], key=lambda x: (int(x.split("_day_")[1]), int(x.split("_")[1]))))
+    sorted_columns = ["title"] + sorted_columns
+    new = [item for item in sorted_columns if item in df.columns]
+    return df[new]
+
+
 # Corrected function to ensure rows with no active slots are included as None
-def de_one_hot_columns_include_empty_slots(df, datetime_index):
+def de_one_hot_columns_include_empty_slots(
+    df: pd.DataFrame, datetime_index: pd.DatetimeIndex) -> pd.DataFrame:
     """
     De-one-hot the slot columns, associating times with titles, and including rows with None for inactive slots.
 
@@ -274,20 +286,20 @@ def de_one_hot_columns_include_empty_slots(df, datetime_index):
     pd.DataFrame: A DataFrame with "time" and "title" columns, including rows with None for inactive slots.
     """
     # Adjust datetime index to match the slot columns
-    adjusted_index = datetime_index[: df.shape[1] - 1]
+    adjusted_index: pd.DatetimeIndex = datetime_index[: df.shape[1] - 1]
     
     # Rename columns using the adjusted datetime index
-    df.columns = ["title"] + list(adjusted_index)
+    df.columns: List[str] = ["title"] + list(adjusted_index)
     
     # Create a list to hold the results
-    result = []
+    result: List[dict[str, Optional[pd.Timestamp]]] = []
     
     # Iterate over the datetime index
     for time in adjusted_index:
         # Check each movie for the specific time slot
-        empty = True  # Assume the slot is empty
+        empty: bool = True  # Assume the slot is empty
         for _, row in df.iterrows():
-            title = row["title"]
+            title: str = row["title"]
             if row[time] > 0:  # Active slot
                 result.append({"time": time, "title": title})
                 empty = False

@@ -361,7 +361,8 @@ class SchedulingSolver:
             self.scheduling.setControl('soltimelimit', MAX_HARD_LIMIT_RUNTIME)
         if set_hard_limit:
             self.scheduling.setControl('timelimit', MAX_SOFT_LIMIT_RUNTIME)
-
+        self.scheduling.setControl("heurfreq", 10)
+        
         with open(self.__generate_out_filename('console_log.txt'), 'w'):
             self.scheduling.solve()
 

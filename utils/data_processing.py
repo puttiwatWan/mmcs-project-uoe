@@ -114,3 +114,37 @@ def top_n_viable_film(movie_df: pd.DataFrame, p: float=0.33) -> pd.DataFrame:
     movie_df = movie_df.sort_values(['viable_score'], ascending=False)
     return movie_df.head(int(p * len(movie_df)))
 
+
+def calculate_confidence_bounds_array(
+    expected_view: np.ndarray,
+    percentage: float = 0.8,
+    variance: float = 1*(10**-5)
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Calculate the upper and lower confidence bounds for an array of expected values.
+
+    Args:
+        expected_view (np.ndarray): A NumPy array of expected values.
+        percentage (float, optional): The confidence level as a proportion (e.g., 0.8 for 80% confidence). Defaults to 0.8.
+        variance (float, optional): The variance factor used in the calculation. Defaults to 1.5.
+        scale_factor (float, optional): The scaling factor applied to the variance (e.g., 10^-1). Defaults to 10.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: Two NumPy arrays:
+            - Upper confidence bounds.
+            - Lower confidence bounds, adjusted to be no less than 0.
+    """
+    # Calculate the z-score for the confidence percentage
+    z = st.norm.ppf((1 + percentage) / 2)
+    
+    # Calculate the variance factor
+    variance_factor = np.sqrt(variance)
+    
+    # Calculate upper and lower bounds for the array
+    upper = expected_view + (z * variance_factor)
+    lower = expected_view - (z * variance_factor)
+    
+    # Ensure lower bounds are not less than 0
+    lower = np.maximum(lower, 0)
+    
+    return upper, lower
