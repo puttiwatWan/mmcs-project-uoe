@@ -14,19 +14,19 @@ from config.config import (COMPETITORS,
                            SLOT_DURATION,
                            TOTAL_SLOTS)
 from utils.schedule_processing import (combine_schedule,
-                                       consolidate_time_to_30_mins_slot,
                                        dynamic_pricing,
-                                       return_selected_week,
-                                       get_date_from_week,
-                                       create_competitor_schedule,
-                                       decay_view_penelty,
-                                       process_current_week,
-                                       process_competitor_current_week,
-                                       update_schedule,
                                        return_ads_30_mins)
 
 
 def time_spent_decorator(func):
+    """
+    The function is a decorator which prints out when a function func is started
+    and prints out the total time used to run the function once it is done.
+    <br><br>
+
+    :param func: A function to be decorated
+    :returns: A wrapped function
+    """
     def wrapper(*args, **kwargs):
         print(f"====== Starting function {func.__name__} ======")
         st = dt.now()
@@ -36,7 +36,25 @@ def time_spent_decorator(func):
     return wrapper
 
 
-class Solver:
+class SchedulingSolver:
+    """
+    A Solver class is for handling solving the problem. It receives necessary parameters
+    and used to pre-process into data needed for the solver.
+
+    Methods
+    ---------
+    run(set_soft_limit: bool = False, set_hard_limit: bool = False, out_subfolder: str = "", xp_output: bool = True):
+    ==> Set up the problem and run the solver.
+
+    update_data(original_movie_df: pd.DataFrame = None,
+                movie_df: pd.DataFrame = None,
+                competitor_schedules: list[pd.DataFrame] = None,
+                channel_a_30_schedule_df: pd.DataFrame = None):
+    ==> Update the data.
+
+    reset_problem():
+    ==> Reset the problem.
+    """
     def __init__(self,
                  original_movie_df: pd.DataFrame,
                  movie_df: pd.DataFrame,
@@ -44,6 +62,24 @@ class Solver:
                  channel_a_30_schedule_df: pd.DataFrame,
                  number_of_days: int,
                  ):
+        """
+        A constructor of a Solver class.
+        <br><br>
+
+        :param original_movie_df: a movie dataframe with all movies
+        :param movie_df: the filtered movie dataframe. Contains movies picked from the
+        original_movie_df by some conditions
+        :param competitor_schedules: schedules of all competitors
+        :param channel_a_30_schedule_df: our channel schedule, pre-processed into a
+        time slot of 30 minutes
+        :param number_of_days: how many days should the result schedule be
+        """
+
+        # If needed to activate the license file.
+        # xp.init('/Applications/FICO Xpress/xpressmp/bin/xpauth.xpr')
+
+        # These variables are decision variables. It will be explained in the
+        # add_decision_variables() method.
         self.movie = None
         self.movie_time = None
         self.start_time = None
@@ -53,101 +89,123 @@ class Solver:
         self.increased_viewers = None
         self.z = None
 
+        # OUT_PATH is the base path for output files.
+        self.OUT_PATH = "out"
+        # out_subfolder is the subfolder to store the output file
+        self.out_subfolder = ""
+        # MIP_GAP will be printed when the soft or hard limit is set.
+        self.mip_gap = None
+
+        # original_movie_df is the movie dataframe with all movies.
         self.original_movie_df = original_movie_df
+        # movie_df is the filtered movie dataframe. It contains movies picked from the
+        # original_movie_df by some conditions
         self.movie_df = movie_df
 
+        # all_genres contains all unique genres of all movies.
         all_genres = list(set(chain.from_iterable(original_movie_df["genres"])))
+        # conversion_rates contains all conversion rates for each movie in each ad slot. 
+        # The dimension is (n_movies x n_days x n_ad_slot_30_min)
         self.conversion_rates = generate_conversion_rates(competitor_schedules[0], movie_df, original_movie_df,
                                                           all_genres, MAX_CONVERSION_RATE)
 
-        # Parameters related to competitor_schedules and channel_a_30_schedule_df
+        # === Parameters related to competitor_schedules and channel_a_30_schedule_df ===
+        # comp_ads_slots contains two data. 
+        # One is whether that time slot in a competitor has an ad or not (value as 1 or 0)
+        # Another data is the price for each ad slot on each competitor. 
+        # The dimension is n_comp x n_days x n_time_slots x (0|1, ad_price).
         comp_ads_slots = []  # np_array of dimension n_comp x n_days x n_time_slots x (0|1, ad_price)
-        comp_ads_viewership = []  # np_array of dimension n_comp x n_demo x n_days x n_time_slots
+        # comp_ads_viewership contains the number of viewership of each demographic in each ad slot of each competitor.
+        # The dimension is n_comp x n_demo x n_days x n_time_slots.
+        comp_ads_viewership = []
         for comp in competitor_schedules:
             ads, ad_viewership = return_ads_30_mins(comp, channel_a_30_schedule_df.index)
             comp_ads_slots.append(ads)
             comp_ads_viewership.append(ad_viewership)
         self.comp_ads_slots = np.array(comp_ads_slots)
         self.comp_ads_viewership = np.array(comp_ads_viewership)
+        
+        # ads_price_per_view is a price per view for each ad sold. It is calculated from the average price per 
+        # view among all competitors.
         self.ads_price_per_view = dynamic_pricing(week=40, competitor_schedule_list=competitor_schedules)
-        self.combine_30min_df = combine_schedule(channel_a_30_schedule_df)
+        # based_view_count is the baseline view count in each time slot that takes a prime time factor into account.
+        self.based_view_count = combine_schedule(channel_a_30_schedule_df)
 
+        # number_of_movies is the total of number of movies used to solve.
         self.number_of_movies = len(movie_df)
+        # number_of_competitors is the total number of competitors
         self.number_of_competitors = len(COMPETITORS)
+        # number_of_time_slots is the number of total time slot. It is calculated by the total available
+        # show time per day in minutes divided by the duration in each slot.
         self.number_of_time_slots = int((24 - 7) * 60 / SLOT_DURATION)
+        # number_of_days is how many days the result schedule should have.
         self.number_of_days = number_of_days
 
+        # These parameters are the range of movies, competitors, time slots, and days.
         self.Movies = range(self.number_of_movies)
         self.Competitors = range(self.number_of_competitors)
         self.TimeSlots = range(self.number_of_time_slots)
         self.Days = range(self.number_of_days)
 
-        self.M = 1  # Maximum viewership possible in one time slot
+        # M is the maximum viewership in one time slot.
+        self.M = 1
 
+        # scheduling is an initiation of the problem.
         self.scheduling = xp.problem('scheduling')
 
-    def update_data(self,
-                    original_movie_df: pd.DataFrame = None,
-                    movie_df: pd.DataFrame = None,
-                    competitor_schedules: list[pd.DataFrame] = None,
-                    channel_a_30_schedule_df: pd.DataFrame = None,
-                    ):
-        if movie_df:
-            self.movie_df = movie_df
-            self.number_of_movies = len(movie_df)
-            self.Movies = range(self.number_of_movies)
-        if original_movie_df:
-            self.original_movie_df = original_movie_df
-        if competitor_schedules or channel_a_30_schedule_df:
-            if competitor_schedules:
-                self.ads_price_per_view = dynamic_pricing(week=40, competitor_schedule_list=competitor_schedules)
-                all_genres = list(set(chain.from_iterable(original_movie_df["genres"])))
-                self.conversion_rates = generate_conversion_rates(competitor_schedules[0], movie_df, original_movie_df,
-                                                                  all_genres, MAX_CONVERSION_RATE)
-            if channel_a_30_schedule_df:
-                self.combine_30min_df = combine_schedule(channel_a_30_schedule_df)
-
-            comp_ads_slots = []  # np_array of dimension n_comp x n_days x n_time_slots x (0|1, ad_price)
-            comp_ads_viewership = []  # np_array of dimension n_comp x n_demo x n_days x n_time_slots
-            for comp in competitor_schedules:
-                ads, ad_viewership = return_ads_30_mins(comp, channel_a_30_schedule_df.index)
-                comp_ads_slots.append(ads)
-                comp_ads_viewership.append(ad_viewership)
-            self.comp_ads_slots = np.array(comp_ads_slots)
-            self.comp_ads_viewership = np.array(comp_ads_viewership)
-
-    def reset_problem(self):
-        del self.scheduling
+    def __generate_out_filename(self, filename: str) -> str:
+        """
+        Combine the filename with the base path.
+        """
+        return self.OUT_PATH + self.out_subfolder + filename
 
     @time_spent_decorator
-    def add_decision_variables(self):
+    def __add_decision_variables(self):
+        """
+        Create decision variables.
+        """
+
+        # movie shows whether the movie i is shown on day d.
         self.movie = self.scheduling.addVariables(self.number_of_movies, self.number_of_days, name='m',
                                                   vartype=xp.binary)
+        # movie_time shows which movie is being shown on the time slot t of day d. If the movie i is being shown,
+        # the value is 1, otherwise, 0.
         self.movie_time = self.scheduling.addVariables(self.number_of_movies, self.number_of_time_slots,
-                                                       self.number_of_days,
-                                                       name="mt",
-                                                       vartype=xp.binary)
+                                                       self.number_of_days, name="mt", vartype=xp.binary)
+        # start_time is which time slot the movie i starts showing on day d.
         self.start_time = self.scheduling.addVariables(self.number_of_movies, self.number_of_days, name='s',
                                                        vartype=xp.integer)
+        # end_time is which time slot the movie i ends on day d.
         self.end_time = self.scheduling.addVariables(self.number_of_movies, self.number_of_days, name='e',
                                                      vartype=xp.integer)
+        # sold_ad_slots tells whether the ad in time slot t of the shown movie i is sold to the competitor c on day d.
+        # If the ad is sold, the value is 1, otherwise, 0.
         self.sold_ad_slots = self.scheduling.addVariables(self.number_of_movies, self.number_of_time_slots,
                                                           self.number_of_competitors, self.number_of_days,
                                                           name="sa", vartype=xp.binary)
+        # bought_ad_slots tells whether movie i is being advertised on a time slot t of competitor c on day d.
+        # If it is being advertised, the value is 1, otherwise, 0.
         self.bought_ad_slots = self.scheduling.addVariables(self.number_of_movies, self.number_of_time_slots,
                                                             self.number_of_competitors, self.number_of_days,
                                                             name="ba", vartype=xp.binary)
+        # increased_viewers is the converted view count from advertising our own movies on the competitors' channels.
         self.increased_viewers = self.scheduling.addVariables(self.number_of_time_slots, self.number_of_competitors,
                                                               self.number_of_days,
                                                               name="iv", vartype=xp.continuous)
+        # z is for the linearization of the calculation of sold_ad_slots * increased_viewers to avoid the
+        # quadratic objective function.
         self.z = self.scheduling.addVariables(self.number_of_movies, self.number_of_time_slots,
                                               self.number_of_competitors,
                                               self.number_of_days,
                                               name="z", vartype=xp.continuous)
 
     @time_spent_decorator
-    def add_objective_function(self):
-        # The objective is to maximize the profit gained from showing movies and selling ads.
+    def __add_objective_function(self):
+        """
+        Define an objective function.
+        """
+
+        # The objective is to maximize the profit gained from showing movies, buying ads, and selling ads.
         self.scheduling.setObjective(
             # Deduct the licensing fee for each movie shown
             - xp.Sum(self.movie_df['license_fee'].iloc[i] * xp.Sum(self.movie[i, d] for d in self.Days)
@@ -162,7 +220,7 @@ class Solver:
                     # The ads_price_per_view is calculated from the average price of an ad per expected views of
                     # all competitors.
                     xp.Sum(
-                        self.combine_30min_df[f"{demo}_prime_time_view_count"].iloc[t] *
+                        self.based_view_count[f"{demo}_prime_time_view_count"].iloc[t] *
                         self.movie_df[f"{demo}_scaled_popularity"].iloc[i] for demo in DEMOGRAPHIC_LIST
                     )
                     * self.sold_ad_slots[i, t, c, d]  # Sold ad slots
@@ -189,7 +247,11 @@ class Solver:
         )
 
     @time_spent_decorator
-    def add_constraints(self):
+    def __add_constraints(self):
+        """
+        Add constraints to the problem.
+        """
+
         # ====== Constraints for selecting movies to be shown ======
         # At most one movie can be shown at a time
         # noinspection PyArgumentList
@@ -208,19 +270,25 @@ class Solver:
         # No duplicated movies within a number of days
         self.scheduling.addConstraint(xp.Sum(self.movie[i, d] for d in self.Days) <= 1 for i in self.Movies)
 
-        # ====== Constraints for linearize increased_viewership
+        # ====== Constraints for linearizing increased_viewership
+        # z cannot go beyond increased_viewers. This is to cap z to when the sold_ad_slot is 1, then the value is
+        # actually sold_ad_slots * increased_viewers
         self.scheduling.addConstraint(
             self.z[i, t, c, d] <= self.increased_viewers[t, c, d] for i in self.Movies for t in self.TimeSlots for c in
-            self.Competitors for d in
-            self.Days)
+            self.Competitors for d in self.Days)
+        # If the ad is not sold in that time slot t, then z is 0. This means the gained view count is not taken into
+        # account when calculating the profit from selling ads since the ad itself is not sold.
         self.scheduling.addConstraint(
             self.z[i, t, c, d] <= self.M * self.sold_ad_slots[i, t, c, d] for i in self.Movies for t in self.TimeSlots
             for c in self.Competitors for d
             in self.Days)
+        # Set a lower bound for z to be the value of increased_viewers if sold_ad_slots is 1. Combining with the first
+        # constraint of z above, z will be guaranteed to be the same as increased_viewers whenever sold_ad_slots is 1,
+        # or to say whenever the ad is sold in that time slot t.
         self.scheduling.addConstraint(
             self.z[i, t, c, d] >= self.increased_viewers[t, c, d] - self.M * (1 - self.sold_ad_slots[i, t, c, d]) for i
-            in self.Movies for t in
-            self.TimeSlots for c in self.Competitors for d in self.Days)
+            in self.Movies for t in self.TimeSlots for c in self.Competitors for d in self.Days)
+        # Cap the lower bound of z to not be negative.
         self.scheduling.addConstraint(
             self.z[i, t, c, d] >= 0 for i in self.Movies for t in self.TimeSlots for c in self.Competitors for d in
             self.Days)
@@ -280,50 +348,64 @@ class Solver:
             for i in self.Movies for c in self.Competitors)
 
     @time_spent_decorator
-    def solve(self, set_soft_limit: bool = False, set_hard_limit: bool = False):
+    def __solve(self, set_soft_limit: bool = False, set_hard_limit: bool = False):
+        """
+        This function sets the config for the solver and solves the problem.
+        <br><br>
+
+        :param set_soft_limit: is used to check whether the soft limit of the solver should be set
+        :param set_hard_limit: is used to check whether the hard limit of the solver should be set
+        """
         if set_soft_limit:
             self.scheduling.setControl('soltimelimit', MAX_HARD_LIMIT_RUNTIME)
         if set_hard_limit:
             self.scheduling.setControl('timelimit', MAX_SOFT_LIMIT_RUNTIME)
 
-        self.scheduling.solve()
+        with open(self.__generate_out_filename('console_log.txt'), 'w'):
+            self.scheduling.solve()
 
-        if set_soft_limit or set_hard_limit:
-            obj_val = self.scheduling.attributes.objval
-            best_bound = self.scheduling.getAttrib('bestbound')
-            mip_gap = 100 * ((obj_val - best_bound) / obj_val)
-
-            print(f"MIP GAP: {mip_gap}")
-
+            if set_soft_limit or set_hard_limit:
+                # If the limit is set, print out the MIP_GAP
+                obj_val = self.scheduling.attributes.objval
+                best_bound = self.scheduling.getAttrib('bestbound')
+                self.mip_gap = 100 * ((obj_val - best_bound) / obj_val)
+    
+            print(f"Objective Value: {self.scheduling.attributes.objval}")
+    
     @time_spent_decorator
-    def save_results(self, subfolder: str = ""):
-        def generate_path_name(filename: str) -> str:
-            return "out/" + subfolder + filename
-
+    def __save_results(self):
+        """
+        Save results from the solver to files.
+        """
         days_labels = ['day_{0}'.format(d) for d in self.Days]
+        # Save results for movie
         mdf = pd.DataFrame(data=self.scheduling.getSolution(self.movie), index=self.movie_df['title'],
                            columns=days_labels)
         filtered_mdf = mdf[mdf.any(axis='columns')]
-        filtered_mdf.to_csv(generate_path_name('movie.csv'))
+        filtered_mdf.to_csv(self.__generate_out_filename('movie.csv'))
 
+        # Save results for movie_time
         mt_sol = self.scheduling.getSolution(self.movie_time)
         m, n, r = mt_sol.shape
         mt_sol = mt_sol.reshape(m, n * r)
         slot_day_labels = ['slot_{0}_day_{1}'.format(t, d) for t in self.TimeSlots for d in self.Days]
         mt_df = pd.DataFrame(data=mt_sol, index=self.movie_df['title'], columns=slot_day_labels)
         filtered_mt_df = mt_df[mt_df.any(axis='columns')]
-        filtered_mt_df.to_csv(generate_path_name('movie_time.csv'))
+        filtered_mt_df.to_csv(self.__generate_out_filename('movie_time.csv'))
 
+        # Save results for start_time
         st_df = pd.DataFrame(data=self.scheduling.getSolution(self.start_time), index=self.movie_df['title'],
                              columns=days_labels)
         filtered_st_df = st_df[mdf.any(axis='columns')]
-        filtered_st_df.to_csv(generate_path_name("start_time.csv"))
+        filtered_st_df.to_csv(self.__generate_out_filename("start_time.csv"))
 
+        # Save results for end_time
         et_df = pd.DataFrame(data=self.scheduling.getSolution(self.end_time), index=self.movie_df['title'],
                              columns=days_labels)
         filtered_et_df = et_df[mdf.any(axis='columns')]
-        filtered_et_df.to_csv(generate_path_name("end_time.csv"))
+        filtered_et_df.to_csv(self.__generate_out_filename("end_time.csv"))
 
+        # Save results for sold_ad_slots
         as_sol = self.scheduling.getSolution(self.sold_ad_slots)
         m, n, p, q = as_sol.shape
         as_sol = as_sol.reshape(m, n * q * p)
@@ -331,8 +413,9 @@ class Solver:
                                for t in self.TimeSlots for c in self.Competitors for d in self.Days]
         as_df = pd.DataFrame(data=as_sol, index=self.movie_df['title'], columns=slot_comp_day_label)
         filtered_as_df = (as_df[as_df.any(axis='columns')])
-        filtered_as_df.to_csv(generate_path_name('sold_ad_slots.csv'))
+        filtered_as_df.to_csv(self.__generate_out_filename('sold_ad_slots.csv'))
 
+        # Save results for bought_ad_slots
         bs_sol = self.scheduling.getSolution(self.bought_ad_slots)
         m, n, p, q = bs_sol.shape
         bs_sol = bs_sol.reshape(m, n * q * p)
@@ -340,15 +423,16 @@ class Solver:
                                for t in self.TimeSlots for c in self.Competitors for d in self.Days]
         bs_df = pd.DataFrame(data=bs_sol, index=self.movie_df['title'], columns=slot_comp_day_label)
         filtered_bs_df = (bs_df[bs_df.any(axis='columns')])
-        filtered_bs_df.to_csv(generate_path_name('bought_ad_slots.csv'))
+        filtered_bs_df.to_csv(self.__generate_out_filename('bought_ad_slots.csv'))
 
+        # Save results for increased_viewers
         iv_sol = self.scheduling.getSolution(self.increased_viewers)
         m, n, p = iv_sol.shape
         iv_sol = iv_sol.reshape(m * n, p)
         comp_slot_label = ['comp_{0}_slot_{1}'.format(c, t) for c in self.Competitors for t in self.TimeSlots]
         iv_df = pd.DataFrame(data=iv_sol, index=comp_slot_label, columns=[f"Days_{i}" for i in self.Days])
         filtered_iv_df = (iv_df[iv_df.any(axis='columns')])
-        filtered_iv_df.to_csv(generate_path_name('increase_viewers.csv'))
+        filtered_iv_df.to_csv(self.__generate_out_filename('increase_viewers.csv'))
 
     @time_spent_decorator
     def run(self,
@@ -357,9 +441,71 @@ class Solver:
             out_subfolder: str = "",
             xp_output: bool = True
             ):
+        """
+        Set up the problem and run the solver.
+        <br><br>
+
+        :param set_soft_limit: is used to check whether the soft limit of the solver should be set
+        :param set_hard_limit: is used to check whether the hard limit of the solver should be set
+        :param out_subfolder: is a subfolder for output files
+        :param xp_output: is whether to enable the output of the solver
+        """
+
+        if out_subfolder:
+            # set the subfolder of the output files
+            self.out_subfolder = out_subfolder
+
         xp.setOutputEnabled(xp_output)
-        self.add_decision_variables()
-        self.add_constraints()
-        self.add_objective_function()
-        self.solve(set_soft_limit=set_soft_limit, set_hard_limit=set_hard_limit)
-        self.save_results(subfolder=out_subfolder)
+        self.__add_decision_variables()
+        self.__add_constraints()
+        self.__add_objective_function()
+        self.__solve(set_soft_limit=set_soft_limit, set_hard_limit=set_hard_limit)
+        self.__save_results(subfolder=out_subfolder)
+
+    def update_data(self,
+                    original_movie_df: pd.DataFrame = None,
+                    movie_df: pd.DataFrame = None,
+                    competitor_schedules: list[pd.DataFrame] = None,
+                    channel_a_30_schedule_df: pd.DataFrame = None,
+                    ):
+        """
+        Update the values. Each value is optional.
+        <br><br>
+
+        :param original_movie_df: a movie dataframe with all movies
+        :param movie_df: the filtered movie dataframe. Contains movies picked from the
+        original_movie_df by some conditions
+        :param competitor_schedules: schedules of all competitors
+        :param channel_a_30_schedule_df: our channel schedule, pre-processed into a
+        time slot of 30 minutes
+        """
+        if movie_df:
+            self.movie_df = movie_df
+            self.number_of_movies = len(movie_df)
+            self.Movies = range(self.number_of_movies)
+        if original_movie_df:
+            self.original_movie_df = original_movie_df
+        if competitor_schedules or channel_a_30_schedule_df:
+            if competitor_schedules:
+                self.ads_price_per_view = dynamic_pricing(week=40, competitor_schedule_list=competitor_schedules)
+                all_genres = list(set(chain.from_iterable(original_movie_df["genres"])))
+                self.conversion_rates = generate_conversion_rates(competitor_schedules[0], movie_df, original_movie_df,
+                                                                  all_genres, MAX_CONVERSION_RATE)
+            if channel_a_30_schedule_df:
+                self.based_view_count = combine_schedule(channel_a_30_schedule_df)
+
+            comp_ads_slots = []  # np_array of dimension n_comp x n_days x n_time_slots x (0|1, ad_price)
+            comp_ads_viewership = []  # np_array of dimension n_comp x n_demo x n_days x n_time_slots
+            for comp in competitor_schedules:
+                ads, ad_viewership = return_ads_30_mins(comp, channel_a_30_schedule_df.index)
+                comp_ads_slots.append(ads)
+                comp_ads_viewership.append(ad_viewership)
+            self.comp_ads_slots = np.array(comp_ads_slots)
+            self.comp_ads_viewership = np.array(comp_ads_viewership)
+
+    def reset_problem(self):
+        """
+        Reset the problem.
+        """
+        del self.scheduling
+        self.scheduling = xp.problem('scheduling')
