@@ -18,6 +18,9 @@ from utils.schedule_processing import (consolidate_time_to_30_mins_slot,
 
 
 def import_data():
+    """
+    Import all data
+    """
     base_path = "data/"
 
     mov_df = pd.read_csv(base_path + 'movie_database.csv')
