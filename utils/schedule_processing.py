@@ -261,7 +261,7 @@ def resample_to_day_time(df: pd.DataFrame) -> pd.DataFrame:
     return new_df
 
 
-def sort_df_by_slot_day(df:pd.DataFrame) -> df:pd.DataFrame:
+def sort_df_by_slot_day(df:pd.DataFrame) -> pd.DataFrame:
     """
     Sort DataFrame columns by days and slots then return the sorted DataFrame.
     """
