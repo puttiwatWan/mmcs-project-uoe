@@ -3,8 +3,6 @@ import os
 import pandas as pd
 from config.config import (DAYS_PER_SOLVE,
                            FIRST_WEEK,
-                           OUT_FOLDER,
-                           OUT_SUBFOLDER,
                            P,
                            WEEK_CONSIDERED,
                            YEAR)
@@ -23,7 +21,7 @@ from utils.schedule_processing import (consolidate_time_to_30_mins_slot,
                                        sort_df_by_slot_day,
                                        update_schedule)
 from utils.utils import (init_out_dir,
-                         init_subfolder)
+                         init_subfolder, generate_out_filename)
 
 
 def import_data():
@@ -60,8 +58,6 @@ def import_data():
 
 
 def main():
-    init_out_dir()
-
     # Import Data
     (movie_df, _, _, _, channel_a_schedule_df, channel_0_schedule_df,
      channel_1_schedule_df, channel_2_schedule_df) = import_data()
@@ -81,6 +77,7 @@ def main():
     all_schedule_df['latest_aired_datetime'] = pd.NaT
     all_schedule_df['comp_latest_aired_datetime'] = pd.NaT
 
+    # Initialize the solver with related dataframe
     solver = SchedulingSolver(original_movie_df=original_movie_df,
                               movie_df=movie_df,
                               channel_a_30_schedule_df=channel_a_30_schedule_df,
@@ -93,8 +90,6 @@ def main():
     # the week to start running the solver
     intended_start_week = FIRST_WEEK
     for week in range(FIRST_WEEK, FIRST_WEEK + WEEK_CONSIDERED):
-        init_subfolder(week)
-
         current_date = get_date_from_week(week, YEAR)
         week_offset = week - FIRST_WEEK
 
@@ -114,7 +109,7 @@ def main():
                                                                             f'{demo}_scaled_popularity'] - penalty
 
         current_adjusted_df = top_n_viable_film(current_adjusted_df, p=P)
-        current_adjusted_df.to_csv(f'out/current_adjusted_df_{week}.csv')
+        current_adjusted_df.to_csv(generate_out_filename(week, "current_adjusted_df.csv"))
 
         # RUN XPRESS GET SCHEDULE
         if week >= intended_start_week:
@@ -122,7 +117,7 @@ def main():
             solver.run(week=week, set_soft_limit=True)
             solver.reset_problem()
 
-        schedule_df = pd.read_csv(f'out/week_{week}/movie_time.csv')
+        schedule_df = pd.read_csv(generate_out_filename(week, "movie_time.csv"))
         schedule_df = sort_df_by_slot_day(schedule_df)
         schedule_df = de_one_hot_columns_include_empty_slots(schedule_df, channel_a_30_schedule_df.index)
         schedule_df = schedule_df.set_index('time')
@@ -141,8 +136,7 @@ def main():
 
         # Update Schedule for what has been schedule this time.
         all_schedule_df = update_schedule(schedule_df, competitor_schedule_df, all_schedule_df)
-
-        all_schedule_df.to_csv(f'out/all_schedule_df_{week}.csv')
+        all_schedule_df.to_csv(generate_out_filename(week, "all_schedule_df.csv"))
 
 
 main()

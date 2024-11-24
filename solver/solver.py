@@ -15,6 +15,7 @@ from config.config import (COMPETITORS,
                            MAX_HARD_LIMIT_RUNTIME,
                            MAX_SOFT_LIMIT_RUNTIME,
                            OUT_FOLDER,
+                           OUT_SUBFOLDER,
                            SLOT_DURATION,
                            TOTAL_SLOTS,
                            TOTAL_VIEW_COUNT)
@@ -482,6 +483,7 @@ class SchedulingSolver:
 
     def __update_week(self, week: int):
         self.week = week
+        self.out_subfolder = OUT_SUBFOLDER.format(self.week)
         self.ads_price_per_view = dynamic_pricing(week=self.week, competitor_schedule_list=self.competitor_schedules)
 
     @time_spent_decorator
@@ -510,8 +512,6 @@ class SchedulingSolver:
         if out_subfolder:
             # set the subfolder of the output files
             self.out_subfolder = out_subfolder
-        else:
-            self.out_subfolder = f"week_{self.week}"
 
         xp.setOutputEnabled(xp_output)
 
