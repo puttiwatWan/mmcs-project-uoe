@@ -2,7 +2,8 @@ import pandas as pd
 from config.config import (DAYS_PER_SOLVE,
                            FIRST_WEEK,
                            WEEK_CONSIDERED,
-                           YEAR)
+                           YEAR,
+                           P)
 from solver.solver import SchedulingSolver
 from utils.data_processing import (process_table,
                                    DEMOGRAPHIC_LIST,
@@ -14,7 +15,9 @@ from utils.schedule_processing import (consolidate_time_to_30_mins_slot,
                                        decay_view_penelty,
                                        process_current_week,
                                        process_competitor_current_week,
-                                       update_schedule)
+                                       update_schedule,
+                                       sort_df_by_slot_day,
+                                       de_one_hot_columns_include_empty_slots)
 
 
 def import_data():
@@ -58,7 +61,6 @@ def main():
     # Process Data
     movie_df = process_table(movie_df)
     original_movie_df = movie_df.copy()
-    movie_df = top_n_viable_film(movie_df, p=0.3)
 
     # Create DF needed in the models
     competitor_schedules = [channel_0_schedule_df, channel_1_schedule_df, channel_2_schedule_df]
@@ -66,64 +68,78 @@ def main():
 
     # Weekly schedule
     # Initialized schedule
-    # all_schedule_df = movie_df.copy()
-    # all_schedule_df['latest_showing_date'] = pd.to_datetime('2000-01-01')
-    # all_schedule_df['latest_aired_datetime'] = pd.NaT
-    # all_schedule_df['comp_latest_aired_datetime'] = pd.NaT
+    all_schedule_df = movie_df.copy()
+    all_schedule_df['latest_showing_date'] = pd.to_datetime('2000-01-01')
+    all_schedule_df['latest_aired_datetime'] = pd.NaT
+    all_schedule_df['comp_latest_aired_datetime'] = pd.NaT
 
-    # for week in range(FIRST_WEEK, FIRST_WEEK + WEEK_CONSIDERED):
-    #     current_date = get_date_from_week(week, YEAR)
-    #     this_week_competitor_list = [return_selected_week(comp, week) for comp in competitor_schedules]
-    #     # Get competitor schedule
-    #     combine_schedule = create_competitor_schedule(this_week_competitor_list)
-    #
-    #     # Create Modify DF for this week
-    #     current_adjusted_df = all_schedule_df.copy()
-    #     # Cut all the same movie as competitor out
-    #     current_adjusted_df = current_adjusted_df[~current_adjusted_df['title'].isin(combine_schedule[0])]
-    #     print(current_adjusted_df['latest_aired_datetime'].values)
-    #     print(current_adjusted_df['comp_latest_aired_datetime'].values)
-    #
-    #     # Create Decay for popularity
-    #     for demo in DEMOGRAPHIC_LIST:
-    #         penalty = decay_view_penelty(
-    #             current_adjusted_df[f'{demo}_scaled_popularity'],
-    #             current_adjusted_df['latest_aired_datetime'],
-    #             current_adjusted_df['comp_latest_aired_datetime'],
-    #             current_date).fillna(0)
-    #         current_adjusted_df[f'adjusted_{demo}_scaled_popularity'] = current_adjusted_df[
-    #                                                                         f'{demo}_scaled_popularity'] - penalty
-    #
-    #     current_adjusted_df.to_csv(f'out/current_adjusted_df_{week}.csv')
-    #
-    #     # RUN XPRESS GET SCHEDULE
-    #     schedule_df = return_selected_week(channel_0_schedule_df, week)
-    #
-    #     # Get competitor schedule
-    #     competitor_current_list_df = []
-    #     for comp in competitor_schedules:
-    #         comp_schedule_df = return_selected_week(comp, week)
-    #         competitor_current_list_df.append(comp_schedule_df)
-    #
-    #     # Process current week schedule
-    #     schedule_df = process_current_week(schedule_df, movie_df)
-    #
-    #     # Process current week competitor schedule
-    #     competitor_schedule_df = process_competitor_current_week(competitor_current_list_df, movie_df)
-    #
-    #     # Update Schedule for what has been schedule this time.
-    #     all_schedule_df = update_schedule(schedule_df, competitor_schedule_df, all_schedule_df)
-    #
-    #     last_week_schedule_df = schedule_df
-    #     all_schedule_df.to_csv(f'out/all_schedule_df_{week}.csv')
+    for week in range(FIRST_WEEK, FIRST_WEEK + WEEK_CONSIDERED):
 
-    solver = SchedulingSolver(original_movie_df=original_movie_df,
-                              movie_df=movie_df,
-                              channel_a_30_schedule_df=channel_a_30_schedule_df,
-                              competitor_schedules=competitor_schedules,
-                              number_of_days=DAYS_PER_SOLVE)
+        current_date = get_date_from_week(week, YEAR)
+        cuurent_week_schedule = return_selected_week(channel_a_30_schedule_df, week)
 
-    solver.run()
+        print(len(cuurent_week_schedule))
+        this_week_competitor_list = [return_selected_week(comp, week) for comp in competitor_schedules]
+        # Get competitor schedule
+        combine_schedule = create_competitor_schedule(this_week_competitor_list)
+    
+        # Create Modify DF for this week
+        current_adjusted_df = all_schedule_df.copy()
+        # Cut all the same movie as competitor out
+        current_adjusted_df = current_adjusted_df[~current_adjusted_df['title'].isin(combine_schedule[0])]
+    
+        # Create Decay for popularity
+        for demo in DEMOGRAPHIC_LIST:
+            penalty = decay_view_penelty(
+                current_adjusted_df[f'{demo}_scaled_popularity'],
+                current_adjusted_df['latest_aired_datetime'],
+                current_adjusted_df['comp_latest_aired_datetime'],
+                current_date).fillna(0)
+            current_adjusted_df[f'{demo}_scaled_popularity'] = current_adjusted_df[
+                                                                            f'{demo}_scaled_popularity'] - penalty
+            
+        current_adjusted_df = top_n_viable_film(current_adjusted_df, p=P)
+        current_adjusted_df.to_csv(f'out/weekly/current_adjusted_df_{week}.csv')
+
+        # if week > 43:
+        #     # RUN XPRESS GET SCHEDULE
+        #     solver = SchedulingSolver(original_movie_df=original_movie_df,
+        #                         movie_df=current_adjusted_df,
+        #                         channel_a_30_schedule_df=cuurent_week_schedule,
+        #                         competitor_schedules=this_week_competitor_list,
+        #                         number_of_days=DAYS_PER_SOLVE,
+        #                         week=week)
+
+        #     solver.run()
+
+        
+
+        schedule_df = pd.read_csv(f'out/week_{40}/movie_time.csv')
+        schedule_df = sort_df_by_slot_day(schedule_df)
+        schedule_df = de_one_hot_columns_include_empty_slots(schedule_df, channel_a_30_schedule_df.index)
+        schedule_df = schedule_df.set_index('time')
+        print(schedule_df.head())
+        # Get competitor schedule
+        competitor_current_list_df = []
+        for comp in competitor_schedules:
+            comp_schedule_df = return_selected_week(comp, week)
+            competitor_current_list_df.append(comp_schedule_df)
+    
+        # Process current week schedule
+        schedule_df = process_current_week(schedule_df, movie_df)
+
+        print(schedule_df.head())
+    
+        # Process current week competitor schedule
+        competitor_schedule_df = process_competitor_current_week(competitor_current_list_df, movie_df)
+    
+        # Update Schedule for what has been schedule this time.
+        all_schedule_df = update_schedule(schedule_df, competitor_schedule_df, all_schedule_df)
+    
+
+        all_schedule_df.to_csv(f'out/weekly/all_schedule_df_{week}.csv')
+
+
 
 
 main()
