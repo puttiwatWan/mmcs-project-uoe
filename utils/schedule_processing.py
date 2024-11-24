@@ -8,7 +8,8 @@ from config.config import (DAY_OFFSET,
                            TOTAL_SLOTS,
                            TOTAL_VIEW_COUNT)
 
-# This script deal with so called "slot" #
+
+# This script deals with the so called "slot" #
 
 
 def consolidate_time_to_30_mins_slot(df: pd.DataFrame) -> pd.DataFrame:
@@ -48,16 +49,15 @@ def create_competitor_schedule(competitor_list):
         """
         modify_index = schedule.index
         schedule['week'] = (
-            modify_index - pd.Timedelta(offset, unit='D')).isocalendar().week
+                modify_index - pd.Timedelta(offset, unit='D')).isocalendar().week
         schedule['year'] = modify_index.isocalendar().year
         return schedule
 
     unique_film_list = []
     for df in competitor_list:
-
         df = create_week_year(df)
         unique_film_list.append(df.groupby(['week', 'year'])[
-                                'content'].agg(['unique']))
+                                    'content'].agg(['unique']))
 
     combined_schedule = []
     for week in range(unique_film_list[0].size):
@@ -79,17 +79,12 @@ def strip_ads_only(df_list):
     for df in df_list:
         ads_df = df.loc[df['content'] == 'Advert']
         sum_ad_price = ads_df['ad_slot_price'].sum()
-        # TODO: clean up printing
-        # print(f'Total ads price {sum_ad_price}')
         total_expected_view = 0
         for demographic in DEMOGRAPHIC_LIST:
             total_expected_view = ads_df[[f'{demographic}_expected_view_count']].sum(
             ).values[0] + total_expected_view
-        # print(f'Total expected view {total_expected_view * TOTAL_VIEW_COUNT}')
         ads_ratio.append(
             sum_ad_price / (total_expected_view * TOTAL_VIEW_COUNT))
-        # print(f'The price per view of channel {counter} is {
-        #       sum_ad_price / (total_expected_view * TOTAL_VIEW_COUNT)}')
         counter = counter + 1
     return ads_ratio
 
@@ -115,7 +110,7 @@ def dynamic_pricing(week: int, competitor_schedule_list: list[pd.DataFrame]) -> 
     for df in competitor_schedule_list:
         week_df_list.append(return_selected_week(df, week))
     comp_ads_ratio = strip_ads_only(week_df_list)
-    return max(MIN_ADS_PRICE_PER_VIEW, (min(comp_ads_ratio)) * (1-LOWER_PRICE))
+    return max(MIN_ADS_PRICE_PER_VIEW, (min(comp_ads_ratio)) * (1 - LOWER_PRICE))
 
 
 def process_current_week(schedule_df, movie_df):
@@ -129,17 +124,6 @@ def process_current_week(schedule_df, movie_df):
     schedule_df = schedule_df.merge(
         movie_df[['title']], left_on='content', right_on='title', how="right")
     return schedule_df
-
-
-def update_schedule(schedule_df, past_schedule_df):
-    """
-    Update schedule df with current week schedule for "long term" storage.
-    """
-
-    past_schedule_df['latest_aired_datetime'] = np.where(~schedule_df['aired_datetime'].isnull(),
-                                                         schedule_df['aired_datetime'],
-                                                         past_schedule_df['latest_aired_datetime'])
-    return past_schedule_df
 
 
 def process_competitor_current_week(competitor_list_df, movie_df):
@@ -179,9 +163,9 @@ def update_schedule(schedule_df, competitor_schedule_df, past_schedule_df):
                                                          schedule_df['aired_datetime'],
                                                          past_schedule_df['latest_aired_datetime'])
     past_schedule_df['comp_latest_aired_datetime'] = np.where(~competitor_schedule_df['aired_datetime'].isnull(),
-                                                        competitor_schedule_df['aired_datetime'],
-                                                        past_schedule_df['latest_aired_datetime'])
-    
+                                                              competitor_schedule_df['aired_datetime'],
+                                                              past_schedule_df['latest_aired_datetime'])
+
     return past_schedule_df
 
 
@@ -192,18 +176,18 @@ def decay(lambda_rate, X):
 
 def decay_view_penelty(estimate_view, latest_showing_date, competitors_latest_showing_date, current_date):
     """Calculate a penalty view for recently view films, currently set to calculate week by week"""
-    lambda_rate = 1/4
-    competitors_rate = 1/2
+    lambda_rate = 1 / 4
+    competitors_rate = 1 / 2
     delta_week = np.floor((current_date - latest_showing_date).dt.days / 7).to_numpy()
     competitors_delta_week = np.floor((
-        current_date - competitors_latest_showing_date).dt.days / 7).to_numpy()
+                                              current_date - competitors_latest_showing_date).dt.days / 7).to_numpy()
     penalty = np.maximum(decay(lambda_rate, delta_week), decay(competitors_rate, competitors_delta_week))
     return penalty * estimate_view
 
 
 def get_date_from_week(week, year):
     """Input week and year, then return date (with offset)"""
-    return pd.to_datetime(str(year)+str(week)+f'{DAY_OFFSET+1}',
+    return pd.to_datetime(str(year) + str(week) + f'{DAY_OFFSET + 1}',
                           format='%Y%W%w')
 
 
@@ -220,16 +204,20 @@ def return_ads_30_mins(schedule: pd.DataFrame, compare_index: pd.DataFrame.index
 
     # Resample and sum the ad slot prices
     slot_price = ad_schedule['ad_slot_price'].resample('30min').sum()
-    slot_price = slot_price[slot_price.index.isin(compare_index)]
+    slot_price = slot_price.reindex(compare_index)
+    slot_price = slot_price.fillna(0)
 
     demo_viewership = []
     for i, _ in enumerate(DEMOGRAPHIC_LIST):
-        demo_viewership.append(ad_schedule[f"{DEMOGRAPHIC_LIST[i]}_expected_view_count"].resample('30min').sum())
-        demo_viewership[i] = demo_viewership[i][demo_viewership[i].index.isin(compare_index)]
-        demo_viewership[i] = np.array(demo_viewership[i]).reshape(TOTAL_DAYS, TOTAL_SLOTS)
+        demo_viewership.append(
+            ad_schedule[f"{DEMOGRAPHIC_LIST[i]}_expected_view_count"].resample('30min').sum())
+        demo_viewership[i] = demo_viewership[i].reindex(compare_index).fillna(0)  # Align to compare_index
+        demo_viewership[i] = np.array(
+            demo_viewership[i]).reshape(TOTAL_DAYS, TOTAL_SLOTS)
 
     ad_price_list = np.array(slot_price).reshape(TOTAL_DAYS, TOTAL_SLOTS)
-    days_list = np.array(slot_price.astype(bool).astype(int)).reshape(TOTAL_DAYS, TOTAL_SLOTS)
+    days_list = np.array(slot_price.astype(bool).astype(int)
+                         ).reshape(TOTAL_DAYS, TOTAL_SLOTS)
 
     # Combine the lists
     ads = [
@@ -248,20 +236,20 @@ def resample_to_day_time(df: pd.DataFrame) -> pd.DataFrame:
     # Extract 'day' and 'time' from the index
     new_index = df.index
     new_df = pd.DataFrame({
-        'day': new_index.date,   # Extract date (YYYY-MM-DD)
-        'time': new_index.time   # Extract time (HH:MM:SS)
+        'day': new_index.date,  # Extract date (YYYY-MM-DD)
+        'time': new_index.time  # Extract time (HH:MM:SS)
     })
-    
+
     # Set MultiIndex on the new DataFrame
     new_df = new_df.set_index(['day', 'time'])
-    
+
     # Assign values from the original DataFrame, aligning by index
     new_df = pd.DataFrame(df.values, index=new_df.index, columns=df.columns)
-    
+
     return new_df
 
 
-def sort_df_by_slot_day(df:pd.DataFrame) -> pd.DataFrame:
+def sort_df_by_slot_day(df: pd.DataFrame) -> pd.DataFrame:
     """
     Sort DataFrame columns by days and slots then return the sorted DataFrame.
     """
@@ -274,7 +262,7 @@ def sort_df_by_slot_day(df:pd.DataFrame) -> pd.DataFrame:
 
 # Corrected function to ensure rows with no active slots are included as None
 def de_one_hot_columns_include_empty_slots(
-    df: pd.DataFrame, datetime_index: pd.DatetimeIndex) -> pd.DataFrame:
+        df: pd.DataFrame, datetime_index: pd.DatetimeIndex) -> pd.DataFrame:
     """
     De-one-hot the slot columns, associating times with titles, and including rows with None for inactive slots.
 
@@ -287,29 +275,24 @@ def de_one_hot_columns_include_empty_slots(
     """
     # Adjust datetime index to match the slot columns
     adjusted_index: pd.DatetimeIndex = datetime_index[: df.shape[1] - 1]
-    
+
     # Rename columns using the adjusted datetime index
-    df.columns: List[str] = ["title"] + list(adjusted_index)
-    
+    df.columns = ["content"] + list(adjusted_index)
+
     # Create a list to hold the results
-    result: List[dict[str, Optional[pd.Timestamp]]] = []
-    
+    result = []
+
     # Iterate over the datetime index
     for time in adjusted_index:
         # Check each movie for the specific time slot
         empty: bool = True  # Assume the slot is empty
         for _, row in df.iterrows():
-            title: str = row["title"]
+            title: str = row["content"]
             if row[time] > 0:  # Active slot
-                result.append({"time": time, "title": title})
+                result.append({"time": time, "content": title})
                 empty = False
         if empty:  # If no movies are active for this slot
-            result.append({"time": time, "title": None})
-    
+            result.append({"time": time, "content": None})
+
     # Convert the results to a DataFrame
     return pd.DataFrame(result)
-
-
-
-
-

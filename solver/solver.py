@@ -1,3 +1,6 @@
+import os
+import sys
+
 import numpy as np
 import pandas as pd
 import xpress as xp
@@ -7,9 +10,11 @@ from itertools import chain
 
 from config.config import (COMPETITORS,
                            DEMOGRAPHIC_LIST,
+                           FIRST_WEEK,
                            MAX_CONVERSION_RATE,
                            MAX_HARD_LIMIT_RUNTIME,
                            MAX_SOFT_LIMIT_RUNTIME,
+                           OUT_FOLDER,
                            SLOT_DURATION,
                            TOTAL_SLOTS,
                            TOTAL_VIEW_COUNT)
@@ -90,8 +95,6 @@ class SchedulingSolver:
         self.increased_viewers = None
         self.z = None
 
-        # OUT_PATH is the base path for output files.
-        self.OUT_PATH = "../out"
         # out_subfolder is the subfolder to store the output file
         self.out_subfolder = ""
         # MIP_GAP will be printed when the soft or hard limit is set.
@@ -101,14 +104,17 @@ class SchedulingSolver:
         self.original_movie_df = original_movie_df
         # movie_df is the filtered movie dataframe. It contains movies picked from the
         # original_movie_df by some conditions
-        self.movie_df = movie_df
+        self.movie_df = movie_df.copy()
 
         # all_genres contains all unique genres of all movies.
         all_genres = list(set(chain.from_iterable(original_movie_df["genres"])))
-        # conversion_rates contains all conversion rates for each movie in each ad slot. 
+        # all_conversion_rates contains all conversion rates for each movie in each ad slot.
         # The dimension is (n_movies x n_days x n_ad_slot_30_min)
-        self.all_conversion_rates = generate_conversion_rates(competitor_schedules[0], movie_df, original_movie_df,
-                                                              all_genres, MAX_CONVERSION_RATE)
+        all_conversion_rates = []
+        for s in competitor_schedules:
+            conv_rates = generate_conversion_rates(s, movie_df, original_movie_df, all_genres, MAX_CONVERSION_RATE)
+            all_conversion_rates.append(conv_rates)
+        self.all_conversion_rates = np.array(all_conversion_rates)
 
         # === Parameters related to competitor_schedules and channel_a_30_schedule_df ===
         # comp_ads_slots contains two data. 
@@ -125,10 +131,14 @@ class SchedulingSolver:
             comp_ads_viewership.append(ad_viewership)
         self.all_comp_ads_slots = np.array(comp_ads_slots)
         self.all_comp_ads_viewership = np.array(comp_ads_viewership)
-        
+
+        # week is which week the schedule belongs to
+        self.week = FIRST_WEEK
+        # competitor_schedules contains the schedules of all competitors
+        self.competitor_schedules = competitor_schedules
         # ads_price_per_view is a price per view for each ad sold. It is calculated from the average price per 
         # view among all competitors.
-        self.ads_price_per_view = dynamic_pricing(week=40, competitor_schedule_list=competitor_schedules)
+        self.ads_price_per_view = dynamic_pricing(week=self.week, competitor_schedule_list=competitor_schedules)
         # based_view_count is the baseline view count in each time slot that takes a prime time factor into account.
         self.all_based_view_count = combine_schedule(channel_a_30_schedule_df)
 
@@ -137,7 +147,7 @@ class SchedulingSolver:
         self.comp_ads_viewership = None
         self.based_view_count = None
 
-        self.__set_offset_data(0)
+        self.__set_offset_data(FIRST_WEEK)
 
         # number_of_movies is the total of number of movies used to solve.
         self.number_of_movies = len(movie_df)
@@ -161,26 +171,33 @@ class SchedulingSolver:
         # scheduling is an initiation of the problem.
         self.scheduling = xp.problem('scheduling')
 
-    def __set_offset_data(self, week_offset: int):
+    def __set_offset_data(self, week: int):
         """
         Set the offset of data to determine which rows of the data to be used
 
-        :param week_offset: shows how many weeks need to be skipped. 0 means no skipping and use
-        the data since the beginning
+        :param week: shows which week the solver is working on
         """
+        week_offset = week - FIRST_WEEK
         days_offset = week_offset * 7
         time_slot_offset = days_offset * TOTAL_SLOTS
 
-        self.conversion_rates = self.all_conversion_rates[:, days_offset:, :]
+        self.conversion_rates = self.all_conversion_rates[:, :, days_offset:, :]
         self.comp_ads_slots = self.all_comp_ads_slots[:, days_offset:, :, :]
         self.comp_ads_viewership = self.all_comp_ads_viewership[:, :, days_offset:, :]
         self.based_view_count = self.all_based_view_count.iloc[time_slot_offset:]
 
     def __generate_out_filename(self, filename: str) -> str:
         """
-        Combine the filename with the base path.
+        Generate the full path for the output file and ensure the directory exists.
         """
-        return self.OUT_PATH + self.out_subfolder + filename
+
+        folder_path = os.path.join(OUT_FOLDER, self.out_subfolder)
+
+        # Ensure the directory exists
+        os.makedirs(folder_path, exist_ok=True)
+
+        # Return the full file path
+        return os.path.join(folder_path, filename)
 
     @time_spent_decorator
     def __add_decision_variables(self):
@@ -243,7 +260,7 @@ class SchedulingSolver:
                     # The ads_price_per_view is calculated from the average price of an ad per expected views of
                     # all competitors.
                     xp.Sum(
-                        self.based_view_count[f"{demo}_prime_time_view_count"].iloc[t] *
+                        self.based_view_count[f"{demo}_prime_time_view_count"].iloc[t + d * TOTAL_SLOTS] *
                         self.movie_df[f"{demo}_scaled_popularity"].iloc[i] for demo in DEMOGRAPHIC_LIST
                     )
                     * self.sold_ad_slots[i, t, c, d]  # Sold ad slots
@@ -329,6 +346,7 @@ class SchedulingSolver:
         self.scheduling.addConstraint(
             self.start_time[i, d] <= t * self.movie_time[i, t, d] + (1 - self.movie_time[i, t, d]) * TOTAL_SLOTS
             for i in self.Movies for t in self.TimeSlots for d in self.Days)
+
         # ====== Constraints for selling ads ======
         # Each movie can sell the ad slots depending on how many ads are in the movie.
         # I.e. 10 ads can be sold to competitors during a movie if the movie has 10 ad breaks.
@@ -360,7 +378,7 @@ class SchedulingSolver:
                                       xp.Sum(self.bought_ad_slots[i, t, c, d] *
                                              xp.Sum(self.comp_ads_viewership[c, demo, d, t] for demo, _ in
                                                     enumerate(DEMOGRAPHIC_LIST)) *
-                                             self.conversion_rates[i, d, t] for i in self.Movies)
+                                             self.conversion_rates[c, i, d, t] for i in self.Movies)
                                       for t in self.TimeSlots for d in self.Days for c in self.Competitors)
         # Each time slot can only be bought once
         self.scheduling.addConstraint(xp.Sum(self.bought_ad_slots[i, t, c, d] for i in self.Movies) <= 1
@@ -380,12 +398,14 @@ class SchedulingSolver:
         :param set_hard_limit: is used to check whether the hard limit of the solver should be set
         """
         if set_soft_limit:
-            self.scheduling.setControl('soltimelimit', MAX_HARD_LIMIT_RUNTIME)
+            self.scheduling.setControl('soltimelimit', MAX_SOFT_LIMIT_RUNTIME)
         if set_hard_limit:
-            self.scheduling.setControl('timelimit', MAX_SOFT_LIMIT_RUNTIME)
+            self.scheduling.setControl('timelimit', MAX_HARD_LIMIT_RUNTIME)
         self.scheduling.setControl("heurfreq", 10)
-        
-        with open(self.__generate_out_filename('console_log.txt'), 'w'):
+
+        original_stdout = sys.stdout
+        with open(self.__generate_out_filename('console_log.txt'), 'w') as f:
+            sys.stdout = f
             self.scheduling.solve()
 
             if set_soft_limit or set_hard_limit:
@@ -393,9 +413,11 @@ class SchedulingSolver:
                 obj_val = self.scheduling.attributes.objval
                 best_bound = self.scheduling.getAttrib('bestbound')
                 self.mip_gap = 100 * ((obj_val - best_bound) / obj_val)
-    
+
             print(f"Objective Value: {self.scheduling.attributes.objval}")
-    
+
+        sys.stdout = original_stdout
+
     @time_spent_decorator
     def __save_results(self):
         """
@@ -458,13 +480,17 @@ class SchedulingSolver:
         filtered_iv_df = (iv_df[iv_df.any(axis='columns')])
         filtered_iv_df.to_csv(self.__generate_out_filename('increase_viewers.csv'))
 
+    def __update_week(self, week: int):
+        self.week = week
+        self.ads_price_per_view = dynamic_pricing(week=self.week, competitor_schedule_list=self.competitor_schedules)
+
     @time_spent_decorator
     def run(self,
             set_soft_limit: bool = False,
             set_hard_limit: bool = False,
             out_subfolder: str = "",
             xp_output: bool = True,
-            week_offset: int = 0
+            week: int = FIRST_WEEK
             ):
         """
         Set up the problem and run the solver.
@@ -474,22 +500,26 @@ class SchedulingSolver:
         :param set_hard_limit: is used to check whether the hard limit of the solver should be set
         :param out_subfolder: is a subfolder for output files
         :param xp_output: is whether to enable the output of the solver
-        :param week_offset: is an offset to the data on which week to work on. Week offset 0
+        :param week: is which week the problem is working on
         means the first week
         """
+
+        self.__update_week(week)
+        self.__set_offset_data(week)
 
         if out_subfolder:
             # set the subfolder of the output files
             self.out_subfolder = out_subfolder
+        else:
+            self.out_subfolder = f"week_{self.week}"
 
-        self.__set_offset_data(week_offset)
         xp.setOutputEnabled(xp_output)
 
         self.__add_decision_variables()
         self.__add_constraints()
         self.__add_objective_function()
         self.__solve(set_soft_limit=set_soft_limit, set_hard_limit=set_hard_limit)
-        self.__save_results(subfolder=out_subfolder)
+        self.__save_results()
 
     def update_data(self,
                     original_movie_df: pd.DataFrame = None,
@@ -508,19 +538,26 @@ class SchedulingSolver:
         :param channel_a_30_schedule_df: our channel schedule, pre-processed into a
         time slot of 30 minutes
         """
-        if movie_df:
-            self.movie_df = movie_df
+        if movie_df is not None:
+            self.movie_df = movie_df.copy()
             self.number_of_movies = len(movie_df)
             self.Movies = range(self.number_of_movies)
-        if original_movie_df:
-            self.original_movie_df = original_movie_df
-        if competitor_schedules or channel_a_30_schedule_df:
+        if original_movie_df is not None:
+            self.original_movie_df = original_movie_df.copy()
+        if competitor_schedules or channel_a_30_schedule_df is not None:
             if competitor_schedules:
-                self.ads_price_per_view = dynamic_pricing(week=40, competitor_schedule_list=competitor_schedules)
+                self.competitor_schedules = competitor_schedules.copy()
+                self.ads_price_per_view = dynamic_pricing(week=self.week, competitor_schedule_list=competitor_schedules)
+
                 all_genres = list(set(chain.from_iterable(original_movie_df["genres"])))
-                self.all_conversion_rates = generate_conversion_rates(competitor_schedules[0], movie_df, original_movie_df,
-                                                                  all_genres, MAX_CONVERSION_RATE)
-            if channel_a_30_schedule_df:
+                all_conversion_rates = []
+                for s in competitor_schedules:
+                    conv_rates = generate_conversion_rates(s, movie_df, original_movie_df, all_genres,
+                                                           MAX_CONVERSION_RATE)
+                    all_conversion_rates.append(conv_rates)
+                self.all_conversion_rates = np.array(all_conversion_rates)
+
+            if channel_a_30_schedule_df is not None:
                 self.all_based_view_count = combine_schedule(channel_a_30_schedule_df)
 
             comp_ads_slots = []  # np_array of dimension n_comp x n_days x n_time_slots x (0|1, ad_price)
@@ -531,6 +568,8 @@ class SchedulingSolver:
                 comp_ads_viewership.append(ad_viewership)
             self.all_comp_ads_slots = np.array(comp_ads_slots)
             self.all_comp_ads_viewership = np.array(comp_ads_viewership)
+
+        self.__set_offset_data(self.week)
 
     def reset_problem(self):
         """

@@ -25,4 +25,8 @@ WEEK_CONSIDERED = 12  # a number of weeks needed to find the schedules
 YEAR = 2024  # year of the data
 
 MAX_HARD_LIMIT_RUNTIME = 30  # maximum runtime in seconds
-MAX_SOFT_LIMIT_RUNTIME = 1200  # maximum  runtime in seconds
+MAX_SOFT_LIMIT_RUNTIME = 600  # maximum  runtime in seconds
+
+P = 0.05  # percentage of movies used in the problem in each week
+OUT_FOLDER = "out"
+OUT_SUBFOLDER = "week_{0}"
