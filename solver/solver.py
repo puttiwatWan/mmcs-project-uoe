@@ -557,6 +557,8 @@ class SchedulingSolver:
             "average_viewership_per_movie_with_ads": [average_total_views],
             "maximum_viewership_per_movie_without_ads": [max_base_views],
             "maximum_viewership_per_movie_with_ads": [max_total_views],
+            "minimum_viewership_per_movie_without_ads": [min_base_views],
+            "minimum_viewership_per_movie_with_ads": [min_total_views],
             "number_of_movies": [number_of_movies],
             # Average revenue per movie without ads
             "average_revenue_per_movie_no_ads": [average_revenue_per_movie_no_ads],
