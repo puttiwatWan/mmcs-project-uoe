@@ -1,5 +1,3 @@
-import os
-
 import pandas as pd
 from config.config import (DAYS_PER_SOLVE,
                            FIRST_WEEK,
@@ -21,7 +19,7 @@ from utils.schedule_processing import (consolidate_time_to_30_mins_slot,
                                        process_competitor_current_week,
                                        sort_df_by_slot_day,
                                        update_schedule)
-from utils.utils import generate_out_filename
+from utils.utils import generate_out_filename, print_title_in_output
 
 
 def import_data():
@@ -90,6 +88,9 @@ def main():
     # the week to start running the solver
     intended_start_week = START_FROM_WEEK
     for week in range(FIRST_WEEK, FIRST_WEEK + WEEK_CONSIDERED):
+        title = f"Starting week {week}"
+        print_title_in_output(title, '*')
+
         current_date = get_date_from_week(week, YEAR)
         week_offset = week - FIRST_WEEK
 
