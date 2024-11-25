@@ -24,7 +24,9 @@ def time_spent_decorator(func):
         print(h_line)
         st = dt.now()
         func(*args, **kwargs)
-        print(f"- Total time used for function {func.__name__}: {(dt.now() - st).total_seconds()} seconds")
+        time_used_text = f"- Total time used for function {func.__name__}: {(dt.now() - st).total_seconds()} seconds"
+        print(time_used_text)
+        print('-' * len(time_used_text) + '\n')
 
     return wrapper
 
