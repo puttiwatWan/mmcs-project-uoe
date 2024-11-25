@@ -14,10 +14,17 @@ def time_spent_decorator(func):
     :returns: A wrapped function
     """
     def wrapper(*args, **kwargs):
-        print(f"====== Starting function {func.__name__} ======")
+        prefix = "====== "
+        suffix = " ======"
+        title = f"Starting function {func.__name__}"
+        h_line = '=' * (len(prefix) + len(suffix) + len(title))
+
+        print(h_line)
+        print(prefix + title + suffix)
+        print(h_line)
         st = dt.now()
         func(*args, **kwargs)
-        print(f"====== Total time used for function {func.__name__}: {(dt.now() - st).total_seconds()} seconds ======")
+        print(f"- Total time used for function {func.__name__}: {(dt.now() - st).total_seconds()} seconds")
 
     return wrapper
 
