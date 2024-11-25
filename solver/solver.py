@@ -514,6 +514,7 @@ class SchedulingSolver:
 
         # Calculate total revenue with ads
         total_revenue_with_ads = 0
+        total_ads_slots_sold = np.sum(sold_ad_slots_solution)
         for i in self.Movies:
             for t in self.TimeSlots:
                 for c in self.Competitors:
@@ -541,40 +542,74 @@ class SchedulingSolver:
         # Retrieve the full solution for sold ad slots and z variables
         sold_ad_slots_solution = self.scheduling.getSolution(self.sold_ad_slots)  # Multi-dimensional array
         z_solution = self.scheduling.getSolution(self.z)  # Multi-dimensional array
+        # Retrieve the precomputed increased viewership solution
         increased_viewership_solution = self.scheduling.getSolution(self.increased_viewers)  # Multi-dimensional array
 
-        # Initialize variables for viewership calculations
-        total_viewership_without_ads = 0
-        total_viewership_with_ads = 0
+        # Track total averages per movie
+        movie_averages_without_ads = []
+        movie_averages_with_ads = []
 
-        # Calculate viewership with and without ads in a single loop
+        max_viewership_with_ad = 0
+        max_viewership_without_ad = 0
+
+        # Iterate over movies
         for i in self.Movies:
-            for t in self.TimeSlots:
-                for d in self.Days:
-                    # Base viewership (same for both with and without ads)
+            movie_viewership_without_ads = 0
+            movie_viewership_with_ads = 0
+
+            # Iterate over days
+            for d in self.Days:
+                # Variables to track daily viewership for averaging over time slots
+                daily_viewership_without_ads = 0
+                daily_viewership_with_ads = 0
+
+                # Iterate over time slots
+                for t in self.TimeSlots:
+                    # Calculate base viewership (independent of ads)
                     base_viewership = sum(
                         self.based_view_count[f"{demo}_prime_time_view_count"].iloc[t + d * TOTAL_SLOTS] *
                         self.movie_df[f"{demo}_scaled_popularity"].iloc[i]
                         for demo in DEMOGRAPHIC_LIST
                     ) * TOTAL_VIEW_COUNT
 
-                    # Increment total viewership without ads
-                    total_viewership_without_ads += base_viewership
+                    # Add to daily viewership without ads
+                    daily_viewership_without_ads += base_viewership
 
-                    # Add increased viewership from ads
-                    increased_viewership = sum(
-                        z_solution[i, t, c, d] for c in self.Competitors
-                    ) * TOTAL_VIEW_COUNT
+                    # Add increased viewership from the precomputed solution
+                    increased_viewership = np.sum(increased_viewership_solution, axis=1)[i] * TOTAL_VIEW_COUNT
+                    daily_viewership_with_ads += base_viewership + increased_viewership
 
-                    # Increment total viewership with ads
-                    total_viewership_with_ads += base_viewership + increased_viewership
+                    if max_viewership_with_ad < base_viewership + increased_viewership:
+                        max_viewership_with_ad = base_viewership + increased_viewership
 
-        # Calculate total viewership gains from ads
-        viewership_gains_from_ads = total_viewership_with_ads - total_viewership_without_ads
+                    if max_viewership_without_ad < base_viewership :
+                        max_viewership_without_ad = base_viewership
+                
+
+                # Calculate average viewership per time slot for the day
+                average_daily_viewership_without_ads = daily_viewership_without_ads / self.movie_df["total_time_slots"].iloc[i]
+                average_daily_viewership_with_ads = daily_viewership_with_ads / self.movie_df["total_time_slots"].iloc[i]
+
+                # Aggregate movie viewership for the day
+                movie_viewership_without_ads += average_daily_viewership_without_ads
+                movie_viewership_with_ads += average_daily_viewership_with_ads
+
+                if movie_viewership_with_ads > 0:
+                    break
+
+            # Track per-movie averages
+            movie_averages_without_ads.append(movie_viewership_without_ads)
+            movie_averages_with_ads.append(movie_viewership_with_ads)
 
         # Calculate average viewership per movie (with and without ads)
-        average_viewership_per_movie_without_ads = total_viewership_without_ads / number_of_movies if number_of_movies > 0 else 0
-        average_viewership_per_movie_with_ads = total_viewership_with_ads / number_of_movies if number_of_movies > 0 else 0
+        average_viewership_per_movie_without_ads = (
+            sum(movie_averages_without_ads) / len([m for m in movie_averages_without_ads if m > 0])
+            if movie_averages_without_ads else 0
+        )
+        average_viewership_per_movie_with_ads = (
+            sum(movie_averages_with_ads) / len([m for m in movie_averages_with_ads if m > 0])
+            if movie_averages_with_ads else 0
+        )
 
         # Add these metrics to general_stats DataFrame
         general_stats = pd.DataFrame({
@@ -584,11 +619,15 @@ class SchedulingSolver:
             "total_licensing_fee": [total_licensing_fee],
             "total_revenue_no_ads": [total_revenue_no_ads],  # Revenue excluding ad-based revenue
             "total_revenue_with_ads": [total_revenue_with_ads],  # Revenue including ads
-            "viewership_without_ads": [total_viewership_without_ads],
-            "viewership_with_ads": [total_viewership_with_ads],
-            "viewership_gains_from_ads": [viewership_gains_from_ads],
+            "total_ads_sold": total_ads_slots_sold,
+            "average_revenue_with_ads": total_revenue_with_ads / total_ads_slots_sold,
+            "viewership_without_ads": [sum(movie_averages_without_ads)],
+            "viewership_with_ads": [sum(movie_averages_with_ads)],
+            "viewership_gains_from_ads": [np.mean(increased_viewership_solution) * TOTAL_VIEW_COUNT],
             "average_viewership_per_movie_without_ads": [average_viewership_per_movie_without_ads],
             "average_viewership_per_movie_with_ads": [average_viewership_per_movie_with_ads],
+            "maximum_viewership_per_movie_without_ads": [max_viewership_without_ad],
+            "maximum_viewership_per_movie_with_ads": [max_viewership_with_ad],
             "number_of_movies": [number_of_movies],
             "average_revenue_per_movie_no_ads": [average_revenue_per_movie_no_ads],  # Average revenue per movie without ads
             "average_revenue_per_movie_with_ads": [average_revenue_per_movie_with_ads],  # Average revenue per movie with ads
@@ -598,6 +637,7 @@ class SchedulingSolver:
             "number_of_ads_bought": [total_ads_bought],  # Total number of ads bought
             "average_ad_cost": [average_ad_cost]  # Average cost per ad bought
         })
+
 
         # Save results to CSV files
         general_stats.to_csv(self.__generate_out_filename('general_stats.csv'), index=False)

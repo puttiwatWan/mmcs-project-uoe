@@ -120,7 +120,7 @@ def main():
 
         schedule_df = pd.read_csv(generate_out_filename(week, "movie_time.csv"))
         schedule_df = sort_df_by_slot_day(schedule_df)
-        schedule_df = de_one_hot_columns_include_empty_slots(schedule_df, channel_a_30_schedule_df.index)
+        schedule_df = de_one_hot_columns_include_empty_slots(schedule_df, return_selected_week(channel_a_30_schedule_df, week).index)
         schedule_df = schedule_df.set_index('time')
 
         # Get competitor schedule
