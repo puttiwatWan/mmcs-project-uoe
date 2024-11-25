@@ -35,7 +35,7 @@ def combine_schedule(df_30min: pd.DataFrame) -> pd.DataFrame:
     return combine_30min
 
 
-def create_competitor_schedule(competitor_list):
+def create_competitor_schedule(competitor_list: list[pd.DataFrame]) -> list[list]:
     """
     Combine competitors schedule into a list week by week.
     So if n weeks was sent, list of unique film with n lenght will be returned
@@ -154,7 +154,10 @@ def process_competitor_current_week(competitor_list_df, movie_df):
     return all_competitor_df
 
 
-def update_schedule(schedule_df, competitor_schedule_df, past_schedule_df):
+def update_schedule(schedule_df: pd.DataFrame,
+                    competitor_schedule_df: pd.DataFrame,
+                    past_schedule_df: pd.DataFrame,
+                    ) -> pd.DataFrame:
     """
     Update schedule df with current week schedule for "long term" storage.
     """

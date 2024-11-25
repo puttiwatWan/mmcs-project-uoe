@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 import xpress as xp
 
-from datetime import datetime as dt
 from itertools import chain
 
 from config.config import (COMPETITORS,
@@ -23,24 +22,7 @@ from utils.advert_conversion_rates import generate_conversion_rates
 from utils.schedule_processing import (combine_schedule,
                                        dynamic_pricing,
                                        return_ads_30_mins)
-
-
-def time_spent_decorator(func):
-    """
-    The function is a decorator which prints out when a function func is started
-    and prints out the total time used to run the function once it is done.
-    <br><br>
-
-    :param func: A function to be decorated
-    :returns: A wrapped function
-    """
-    def wrapper(*args, **kwargs):
-        print(f"====== Starting function {func.__name__} ======")
-        st = dt.now()
-        func(*args, **kwargs)
-        print(f"====== Total time used for function {func.__name__}: {(dt.now() - st).total_seconds()} seconds ======")
-
-    return wrapper
+from utils.utils import time_spent_decorator
 
 
 class SchedulingSolver:
@@ -110,7 +92,7 @@ class SchedulingSolver:
         # all_genres contains all unique genres of all movies.
         all_genres = list(set(chain.from_iterable(original_movie_df["genres"])))
         # all_conversion_rates contains all conversion rates for each movie in each ad slot.
-        # The dimension is (n_movies x n_days x n_ad_slot_30_min)
+        # The dimension is (n_competitors x n_movies x n_days x n_ad_slot_30_min)
         all_conversion_rates = []
         for s in competitor_schedules:
             conv_rates = generate_conversion_rates(s, movie_df, original_movie_df, all_genres, MAX_CONVERSION_RATE)
@@ -230,8 +212,7 @@ class SchedulingSolver:
                                                             self.number_of_competitors, self.number_of_days,
                                                             name="ba", vartype=xp.binary)
         # increased_viewers is the converted view count from advertising our own movies on the competitors' channels.
-        self.increased_viewers = self.scheduling.addVariables(self.number_of_time_slots, self.number_of_competitors,
-                                                              self.number_of_days,
+        self.increased_viewers = self.scheduling.addVariables(self.number_of_movies, self.number_of_competitors,
                                                               name="iv", vartype=xp.continuous)
         # z is for the linearization of the calculation of sold_ad_slots * increased_viewers to avoid the
         # quadratic objective function.
@@ -315,8 +296,8 @@ class SchedulingSolver:
         # z cannot go beyond increased_viewers. This is to cap z to when the sold_ad_slot is 1, then the value is
         # actually sold_ad_slots * increased_viewers
         self.scheduling.addConstraint(
-            self.z[i, t, c, d] <= self.increased_viewers[t, c, d] for i in self.Movies for t in self.TimeSlots for c in
-            self.Competitors for d in self.Days)
+            self.z[i, t, c, d] <= self.increased_viewers[i, c] for i in self.Movies for t in self.TimeSlots
+            for c in self.Competitors for d in self.Days)
         # If the ad is not sold in that time slot t, then z is 0. This means the gained view count is not taken into
         # account when calculating the profit from selling ads since the ad itself is not sold.
         self.scheduling.addConstraint(
@@ -327,8 +308,8 @@ class SchedulingSolver:
         # constraint of z above, z will be guaranteed to be the same as increased_viewers whenever sold_ad_slots is 1,
         # or to say whenever the ad is sold in that time slot t.
         self.scheduling.addConstraint(
-            self.z[i, t, c, d] >= self.increased_viewers[t, c, d] - self.M * (1 - self.sold_ad_slots[i, t, c, d]) for i
-            in self.Movies for t in self.TimeSlots for c in self.Competitors for d in self.Days)
+            self.z[i, t, c, d] >= self.increased_viewers[i, c] - self.M * (1 - self.sold_ad_slots[i, t, c, d])
+            for i in self.Movies for t in self.TimeSlots for c in self.Competitors for d in self.Days)
         # Cap the lower bound of z to not be negative.
         self.scheduling.addConstraint(
             self.z[i, t, c, d] >= 0 for i in self.Movies for t in self.TimeSlots for c in self.Competitors for d in
@@ -374,13 +355,14 @@ class SchedulingSolver:
                                       for i in self.Movies for c in self.Competitors for d in self.Days for t in
                                       self.TimeSlots)
         # Calculate the gained viewers from buying an ad.
-        # The calculation is simply expected_viewership x conversion_rate.
-        self.scheduling.addConstraint(self.increased_viewers[t, c, d] ==
+        # The calculation is simply competitor_expected_viewership x conversion_rate.
+        self.scheduling.addConstraint(self.increased_viewers[i, c] ==
                                       xp.Sum(self.bought_ad_slots[i, t, c, d] *
-                                             xp.Sum(self.comp_ads_viewership[c, demo, d, t] for demo, _ in
-                                                    enumerate(DEMOGRAPHIC_LIST)) *
-                                             self.conversion_rates[c, i, d, t] for i in self.Movies)
-                                      for t in self.TimeSlots for d in self.Days for c in self.Competitors)
+                                             xp.Sum(self.comp_ads_viewership[c, demo, d, t]
+                                                    for demo, _ in enumerate(DEMOGRAPHIC_LIST)) *
+                                             self.conversion_rates[c, i, d, t]
+                                             for t in self.TimeSlots for d in self.Days)
+                                      for i in self.Movies for c in self.Competitors)
         # Each time slot can only be bought once
         self.scheduling.addConstraint(xp.Sum(self.bought_ad_slots[i, t, c, d] for i in self.Movies) <= 1
                                       for t in self.TimeSlots for c in self.Competitors for d in self.Days)
@@ -474,10 +456,7 @@ class SchedulingSolver:
 
         # Save results for increased_viewers
         iv_sol = self.scheduling.getSolution(self.increased_viewers)
-        m, n, p = iv_sol.shape
-        iv_sol = iv_sol.reshape(m * n, p)
-        comp_slot_label = ['comp_{0}_slot_{1}'.format(c, t) for c in self.Competitors for t in self.TimeSlots]
-        iv_df = pd.DataFrame(data=iv_sol, index=comp_slot_label, columns=[f"Days_{i}" for i in self.Days])
+        iv_df = pd.DataFrame(data=iv_sol, index=self.movie_df['title'], columns=[f"Competitor_{c}" for c in self.Competitors])
         filtered_iv_df = (iv_df[iv_df.any(axis='columns')])
         filtered_iv_df.to_csv(self.__generate_out_filename('increase_viewers.csv'))
 
