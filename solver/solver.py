@@ -435,7 +435,7 @@ class SchedulingSolver:
                             self.based_view_count[f"{demo}_prime_time_view_count"].iloc[t + d * TOTAL_SLOTS] *
                             self.movie_df[f"{demo}_scaled_popularity"].iloc[i]
                             for demo in DEMOGRAPHIC_LIST
-                        ) * TOTAL_VIEW_COUNT
+                        ) * TOTAL_VIEW_COUNT * self.ads_price_per_view
 
                         # Increment movie revenue without ads
                         movie_revenue_no_ads += base_revenue * sold_ads_slots[i, t, c, d]
