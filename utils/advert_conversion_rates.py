@@ -241,10 +241,17 @@ def generate_conversion_rates(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
     """
 
     # Get genres of the movies before and after each ad slot based on the schedule
-    prev_genres = schedule_df[(schedule_df['content_type'] == 'Advert').shift(-1).fillna(False)].merge(
-        original_movie_df, left_on='content', right_on='title', how='left').genres.apply(tuple)
-    next_genres = schedule_df[(schedule_df['content_type'] == 'Advert').shift(+1).fillna(False)].merge(
-        original_movie_df, left_on='content', right_on='title', how='left').genres.apply(tuple)
+    prev_content = schedule_df['content_type'].shift(-1) == 'Advert'
+    filtered_df = schedule_df[prev_content]
+    prev_genres = filtered_df.merge(
+        original_movie_df, left_on='content', right_on='title', how='left'
+    ).genres.apply(tuple)
+
+    next_content = schedule_df['content_type'].shift(+1) == 'Advert'
+    filtered_df = schedule_df[next_content]
+    next_genres = filtered_df.merge(
+        original_movie_df, left_on='content', right_on='title', how='left'
+    ).genres.apply(tuple)
 
     # Convert genres to genres vectors
     prev_genres_vector = np.stack(
