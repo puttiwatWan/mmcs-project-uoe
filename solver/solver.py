@@ -407,17 +407,6 @@ class SchedulingSolver:
         Save results from the solver to files.
         """
 
-        # Calculate total licensing fee
-        total_licensing_fee = sum(
-            self.scheduling.getSolution(self.movie)[i, d] * self.movie_df['license_fee'].iloc[i]
-            for i in self.Movies for d in self.Days
-        )
-        
-        # Initialize variables to store aggregated results
-        total_revenue_no_ads = 0
-        total_revenue_with_ads = 0
-        movie_revenues = []
-
         # Retrieve solutions
         movie_solution = self.scheduling.getSolution(self.movie)
         movie_time_solution = self.scheduling.getSolution(self.movie_time)
@@ -426,20 +415,30 @@ class SchedulingSolver:
         bought_ad_slots_solution = self.scheduling.getSolution(self.bought_ad_slots)  # ndarray
         increased_viewership_solution = self.scheduling.getSolution(self.increased_viewers)  # ndarray
 
-        # Track total averages per movie
-        max_total_views = 0
-        max_base_views = 0
-        min_total_views = 0
-        min_base_views = 0
-        sum_base_views = 0
-        sum_total_views = 0
-        total_slots_shown = 0
-        # Iterate over movies
+        # Calculate total licensing fee
+        total_licensing_fee = sum(
+            movie_solution[i, d] * self.movie_df['license_fee'].iloc[i]
+            for i in self.Movies for d in self.Days
+        )
+        
+        # Initialize variables to store aggregated results
+        total_revenue_no_ads = 0
+        total_revenue_with_ads = 0
+        movie_revenues = []
+
+        # Calculate viewership and revenues
+        max_total_views = 0  # max views including converted viewers from bought ads
+        max_base_views = 0  # max views excluding converted viewers from bought ads
+        min_total_views = 0  # min views including converted viewers from bought ads
+        min_base_views = 0  # min views excluding converted viewers from bought ads
+        sum_total_views = 0  # sum of views over time slots including converted viewers from bought ads
+        sum_base_views = 0  # sum of views over time slots excluding converted viewers from bought ads
+        total_slots_shown = 0  # total slots in which the movies are shown
+
         for i in self.Movies:
             movie_revenue_no_ads = 0  # Revenue without ads for the movie
             movie_revenue_with_ads = 0  # Revenue with ads for the movie
 
-            # Iterate over days
             for d in self.Days:
                 if movie_solution[i, d] == 0:
                     continue
@@ -449,29 +448,34 @@ class SchedulingSolver:
                         continue
 
                     total_slots_shown += 1
-                    # Calculate base viewership (independent of ads)
+
+                    # Calculate base viewership (independent of ads bought)
                     base_viewership = sum(
                         self.based_view_count[f"{demo}_prime_time_view_count"].iloc[t + d * TOTAL_SLOTS] *
                         self.movie_df[f"{demo}_scaled_popularity"].iloc[i]
                         for demo in DEMOGRAPHIC_LIST
                     ) * TOTAL_VIEW_COUNT
 
-                    # Add increased viewership from the precomputed solution
+                    # Add increased viewership from buying ads
                     increased_viewership = np.sum(increased_viewership_solution, axis=1)[i] * TOTAL_VIEW_COUNT
                     total_viewership = base_viewership + increased_viewership
 
+                    # Calculate the revenue without taking into account the gained viewers from ads
                     base_revenue = (sum(sold_ad_slots_solution[i, t, c, d] for c in self.Competitors) * base_viewership *
                                     self.ads_price_per_view)
+                    # Calculate the revenue from the gained viewers from ads
                     increased_revenue = (sum(z_solution[i, t, c, d] for c in self.Competitors) *
                                          TOTAL_VIEW_COUNT * self.ads_price_per_view)
 
-                    # Increment movie revenue without ads
+                    # Increment movie revenue
                     movie_revenue_no_ads += base_revenue
                     movie_revenue_with_ads += base_revenue + increased_revenue
 
+                    # Update the sum values
                     sum_base_views += base_viewership
                     sum_total_views += total_viewership
 
+                    # Update max and min values
                     if max_total_views < total_viewership:
                         max_total_views = total_viewership
                     if min_total_views > total_viewership:
@@ -482,24 +486,27 @@ class SchedulingSolver:
                     if min_base_views > base_viewership:
                         min_base_views = base_viewership
 
-            total_revenue_no_ads += movie_revenue_no_ads
-            total_revenue_with_ads += movie_revenue_with_ads
+                # Store total revenue
+                total_revenue_no_ads += movie_revenue_no_ads
+                total_revenue_with_ads += movie_revenue_with_ads
 
-            # Only add the movie if its revenue > 0
-            if movie_revenue_with_ads > 0:
+                # Store the movie revenue
                 movie_revenues.append({
                     "movie_title": self.movie_df['title'].iloc[i],
                     "revenue_no_ads": movie_revenue_no_ads,
                     "revenue_with_ads": movie_revenue_with_ads
                 })
 
-        # Calculate average viewership per movie (with and without ads)
+                # The movie is shown only on a single day and will not be duplicated so
+                # we can break out of the loop and continue with the next movie.
+                break
+
+        # Calculate average viewership (with and without ads)
         average_base_views = sum_base_views / total_slots_shown
         average_total_views = sum_total_views / total_slots_shown
 
         total_ads_slots_sold = np.sum(sold_ad_slots_solution)
 
-        # Convert the movie revenue data into a DataFrame
         movie_revenue_df = pd.DataFrame(movie_revenues)
         movie_revenue_df.to_csv(self.__generate_out_filename('movie_revenues.csv'), index=False)
 
@@ -513,7 +520,7 @@ class SchedulingSolver:
         total_ads_bought = 0  # Total number of ads bought
         movie_costs = {i: 0 for i in self.Movies}  # Track cost per movie
 
-        # Loop through competitors and days to calculate cost for buying ads
+        # Calculate the cost for buying ads
         for c in self.Competitors:
             for d in self.Days:
                 for t in self.TimeSlots:
@@ -626,6 +633,9 @@ class SchedulingSolver:
         filtered_iv_df.to_csv(self.__generate_out_filename('increase_viewers.csv'))
 
     def __update_week(self, week: int):
+        """
+        Update parameters related to week once the week gets updated.
+        """
         self.week = week
         self.out_subfolder = OUT_SUBFOLDER.format(self.week)
         self.ads_price_per_view = dynamic_pricing(week=self.week, competitor_schedule_list=self.competitor_schedules)

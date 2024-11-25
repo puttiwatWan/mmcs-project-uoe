@@ -92,29 +92,29 @@ def main():
         print_title_in_output(title, '+')
 
         current_date = get_date_from_week(week, YEAR)
-        week_offset = week - FIRST_WEEK
 
         # Create Modify DF for this week
-        current_adjusted_df = all_schedule_df.copy()
+        adjusted_movie_df = all_schedule_df.copy()
         # Cut all the same movie as competitor out
-        current_adjusted_df = current_adjusted_df[~current_adjusted_df['title'].isin(combine_schedule[week_offset])]
+        week_offset = week - FIRST_WEEK
+        adjusted_movie_df = adjusted_movie_df[~adjusted_movie_df['title'].isin(combine_schedule[week_offset])]
 
-        # Create Decay for popularity
+        # Create a decay on popularity for the shown movies
         for demo in DEMOGRAPHIC_LIST:
             penalty = decay_view_penelty(
-                current_adjusted_df[f'{demo}_scaled_popularity'],
-                current_adjusted_df['latest_aired_datetime'],
-                current_adjusted_df['comp_latest_aired_datetime'],
+                adjusted_movie_df[f'{demo}_scaled_popularity'],
+                adjusted_movie_df['latest_aired_datetime'],
+                adjusted_movie_df['comp_latest_aired_datetime'],
                 current_date).fillna(0)
-            current_adjusted_df[f'{demo}_scaled_popularity'] = current_adjusted_df[
+            adjusted_movie_df[f'{demo}_scaled_popularity'] = adjusted_movie_df[
                                                                             f'{demo}_scaled_popularity'] - penalty
 
-        current_adjusted_df = top_n_viable_film(current_adjusted_df, p=P)
-        current_adjusted_df.to_csv(generate_out_filename(week, "current_adjusted_df.csv"))
+        adjusted_movie_df = top_n_viable_film(adjusted_movie_df, p=P)
+        adjusted_movie_df.to_csv(generate_out_filename(week, "adjusted_movie_df.csv"))
 
-        # RUN XPRESS GET SCHEDULE
+        # Run the solver to get the schedule for the week
         if week >= intended_start_week:
-            solver.update_data(movie_df=current_adjusted_df)
+            solver.update_data(movie_df=adjusted_movie_df)
             solver.run(week=week, set_soft_limit=True)
             solver.reset_problem()
 
@@ -140,4 +140,5 @@ def main():
         all_schedule_df.to_csv(generate_out_filename(week, "all_schedule_df.csv"))
 
 
-main()
+if __name__ == "__main__":
+    main()
