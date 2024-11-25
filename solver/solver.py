@@ -444,7 +444,7 @@ class SchedulingSolver:
                         increased_revenue = z_solution[i, t, c, d] * TOTAL_VIEW_COUNT * self.ads_price_per_view
 
                         # Increment movie revenue with ads
-                        movie_revenue_with_ads += base_revenue * sold_ads_slots[i, t, c, d] + increased_revenue
+                        movie_revenue_with_ads += movie_revenue_no_ads + increased_revenue
 
             # Aggregate total revenue
             total_revenue_no_ads += movie_revenue_no_ads
