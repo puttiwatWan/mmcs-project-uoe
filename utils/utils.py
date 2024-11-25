@@ -13,22 +13,41 @@ def time_spent_decorator(func):
     :param func: A function to be decorated
     :returns: A wrapped function
     """
-    def wrapper(*args, **kwargs):
-        prefix = "====== "
-        suffix = " ======"
-        title = f"Starting function {func.__name__}"
-        h_line = '=' * (len(prefix) + len(suffix) + len(title))
 
-        print(h_line)
-        print(prefix + title + suffix)
-        print(h_line)
+    def wrapper(*args, **kwargs):
+        title = f"==> Starting function {func.__name__}"
+        print(title)
         st = dt.now()
         func(*args, **kwargs)
-        time_used_text = f"- Total time used for function {func.__name__}: {(dt.now() - st).total_seconds()} seconds"
+        time_used_text = f"-- Total time used for function {func.__name__}: {(dt.now() - st).total_seconds()} seconds"
         print(time_used_text)
-        print('-' * len(time_used_text) + '\n')
+        print('-' * len(time_used_text))
 
     return wrapper
+
+
+def print_title_in_output(title: str, char: str):
+    """
+    Prints the title section in the output console.
+    Example:
+
+    char = '*'
+    title = "Example Title"
+    output:
+    ***************************
+    ****** Example Title ******
+    ***************************
+
+    :param title: the title to be shown
+    :param char: a character used as a frame
+    """
+    prefix = char * 6 + ' '
+    suffix = ' ' + char * 6
+    h_line = char * (len(prefix) + len(suffix) + len(title))
+
+    print(h_line)
+    print(prefix + title + suffix)
+    print(h_line)
 
 
 def init_out_dir():
