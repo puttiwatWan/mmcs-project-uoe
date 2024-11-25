@@ -24,6 +24,8 @@ FIRST_WEEK = 40  # first week of the year corresponding to the data given
 WEEK_CONSIDERED = 12  # a number of weeks needed to find the schedules
 YEAR = 2024  # year of the data
 
+# START_FROM_WEEK tells which week should the solver start from. Normally used when the solver breaks during halfway.
+START_FROM_WEEK = FIRST_WEEK
 MAX_HARD_LIMIT_RUNTIME = 600  # maximum runtime in seconds
 MAX_SOFT_LIMIT_RUNTIME = 600  # maximum  runtime in seconds
 

@@ -4,6 +4,7 @@ import pandas as pd
 from config.config import (DAYS_PER_SOLVE,
                            FIRST_WEEK,
                            P,
+                           START_FROM_WEEK,
                            WEEK_CONSIDERED,
                            YEAR)
 from solver.solver import SchedulingSolver
@@ -20,8 +21,7 @@ from utils.schedule_processing import (consolidate_time_to_30_mins_slot,
                                        process_competitor_current_week,
                                        sort_df_by_slot_day,
                                        update_schedule)
-from utils.utils import (init_out_dir,
-                         init_subfolder, generate_out_filename)
+from utils.utils import generate_out_filename
 
 
 def import_data():
@@ -88,7 +88,7 @@ def main():
     combine_schedule = create_competitor_schedule(competitor_schedules)
 
     # the week to start running the solver
-    intended_start_week = FIRST_WEEK
+    intended_start_week = START_FROM_WEEK
     for week in range(FIRST_WEEK, FIRST_WEEK + WEEK_CONSIDERED):
         current_date = get_date_from_week(week, YEAR)
         week_offset = week - FIRST_WEEK
