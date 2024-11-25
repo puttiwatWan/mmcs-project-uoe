@@ -552,6 +552,9 @@ class SchedulingSolver:
         max_viewership_with_ad = 0
         max_viewership_without_ad = 0
 
+        movie_solution = self.scheduling.getSolution(self.movie)
+        movie_time_solution = self.scheduling.getSolution(self.movie_time)
+
         # Iterate over movies
         for i in self.Movies:
             movie_viewership_without_ads = 0
@@ -559,12 +562,18 @@ class SchedulingSolver:
 
             # Iterate over days
             for d in self.Days:
+                if movie_solution[i, d] == 0:
+                    continue
+
                 # Variables to track daily viewership for averaging over time slots
                 daily_viewership_without_ads = 0
                 daily_viewership_with_ads = 0
 
                 # Iterate over time slots
                 for t in self.TimeSlots:
+                    if movie_time_solution[i, t, d] == 0:
+                        continue
+
                     # Calculate base viewership (independent of ads)
                     base_viewership = sum(
                         self.based_view_count[f"{demo}_prime_time_view_count"].iloc[t + d * TOTAL_SLOTS] *
@@ -577,10 +586,11 @@ class SchedulingSolver:
 
                     # Add increased viewership from the precomputed solution
                     increased_viewership = np.sum(increased_viewership_solution, axis=1)[i] * TOTAL_VIEW_COUNT
-                    daily_viewership_with_ads += base_viewership + increased_viewership
+                    total_viewership = base_viewership + increased_viewership
+                    daily_viewership_with_ads += total_viewership
 
-                    if max_viewership_with_ad < base_viewership + increased_viewership:
-                        max_viewership_with_ad = base_viewership + increased_viewership
+                    if max_viewership_with_ad < total_viewership:
+                        max_viewership_with_ad = total_viewership
 
                     if max_viewership_without_ad < base_viewership :
                         max_viewership_without_ad = base_viewership
@@ -597,17 +607,18 @@ class SchedulingSolver:
                 if movie_viewership_with_ads > 0:
                     break
 
-            # Track per-movie averages
-            movie_averages_without_ads.append(movie_viewership_without_ads)
-            movie_averages_with_ads.append(movie_viewership_with_ads)
+            if movie_viewership_without_ads != 0 or movie_viewership_with_ads != 0:
+                # Track per-movie averages
+                movie_averages_without_ads.append(movie_viewership_without_ads)
+                movie_averages_with_ads.append(movie_viewership_with_ads)
 
         # Calculate average viewership per movie (with and without ads)
         average_viewership_per_movie_without_ads = (
-            sum(movie_averages_without_ads) / len([m for m in movie_averages_without_ads if m > 0])
+            sum(movie_averages_without_ads) / len(movie_averages_without_ads)
             if movie_averages_without_ads else 0
         )
         average_viewership_per_movie_with_ads = (
-            sum(movie_averages_with_ads) / len([m for m in movie_averages_with_ads if m > 0])
+            sum(movie_averages_with_ads) / len(movie_averages_without_ads)
             if movie_averages_with_ads else 0
         )
 
