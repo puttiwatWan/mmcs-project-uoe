@@ -615,6 +615,7 @@ class SchedulingSolver:
         general_stats = pd.DataFrame({
             "week": [self.week],
             "Total Gross": [self.scheduling.attributes.objval],
+            "MIP Gaps": [self.mip_gap],
             "ad_price_per_view": [self.ads_price_per_view],
             "total_licensing_fee": [total_licensing_fee],
             "total_revenue_no_ads": [total_revenue_no_ads],  # Revenue excluding ad-based revenue
