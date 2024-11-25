@@ -406,6 +406,203 @@ class SchedulingSolver:
         """
         Save results from the solver to files.
         """
+
+
+        # Calculate total licensing fee
+        total_licensing_fee = sum(
+            self.scheduling.getSolution(self.movie)[i, d] * self.movie_df['license_fee'].iloc[i]
+            for i in self.Movies for d in self.Days
+        )
+        
+        # Initialize variables to store aggregated results
+        total_revenue_no_ads = 0
+        total_revenue_with_ads = 0
+        movie_revenues = []
+        sold_ads_slots = self.scheduling.getSolution(self.sold_ad_slots)
+        z_solution = self.scheduling.getSolution(self.z)  # Multi-dimensional array
+
+        # Loop through all movies and calculate total revenue (with and without ads) per movie
+        for i in self.Movies:
+            movie_revenue_no_ads = 0  # Revenue without ads for the movie
+            movie_revenue_with_ads = 0  # Revenue with ads for the movie
+
+            for c in self.Competitors:
+                for d in self.Days:
+                    # Sum over all time slots for this movie
+                    for t in self.TimeSlots:
+                        # Revenue without ads
+                        base_revenue = sum(
+                            self.based_view_count[f"{demo}_prime_time_view_count"].iloc[t + d * TOTAL_SLOTS] *
+                            self.movie_df[f"{demo}_scaled_popularity"].iloc[i]
+                            for demo in DEMOGRAPHIC_LIST
+                        ) * TOTAL_VIEW_COUNT
+
+                        # Increment movie revenue without ads
+                        movie_revenue_no_ads += base_revenue * sold_ads_slots[i, t, c, d]
+
+                        # Add increased revenue from ads
+                        increased_revenue = z_solution[i, t, c, d] * TOTAL_VIEW_COUNT * self.ads_price_per_view
+
+                        # Increment movie revenue with ads
+                        movie_revenue_with_ads += base_revenue * sold_ads_slots[i, t, c, d] + increased_revenue
+
+            # Aggregate total revenue
+            total_revenue_no_ads += movie_revenue_no_ads
+            total_revenue_with_ads += movie_revenue_with_ads
+
+            # Only add the movie if its revenue > 0
+            if movie_revenue_with_ads > 0:
+                movie_revenues.append({
+                    "movie_title": self.movie_df['title'].iloc[i],
+                    "revenue_no_ads": movie_revenue_no_ads,
+                    "revenue_with_ads": movie_revenue_with_ads
+                })
+
+        # Convert the movie revenue data into a DataFrame
+        movie_revenue_df = pd.DataFrame(movie_revenues)
+
+        # Save movie revenue to CSV
+        movie_revenue_df.to_csv(self.__generate_out_filename('movie_revenues.csv'), index=False)
+
+
+        # Calculate overall statistics
+        number_of_movies = len(movie_revenue_df[movie_revenue_df['revenue_no_ads'] > 0])
+        average_revenue_per_movie_no_ads = total_revenue_no_ads / number_of_movies if number_of_movies > 0 else 0
+
+        # Bought Ads
+
+        # Retrieve the solution for all bought ad slots in one call
+        bought_ad_slots_solution = self.scheduling.getSolution(self.bought_ad_slots)  # Returns a multi-dimensional array
+
+        # Initialize variables for aggregation
+        total_bought_cost = 0
+        total_ads_bought = 0  # Total number of ads bought
+        movie_costs = {i: 0 for i in self.Movies}  # Track cost per movie
+
+        # Loop through competitors and days
+        for c in self.Competitors:
+            for d in self.Days:
+                for t in self.TimeSlots:
+                    # Get the cost of the ad slot for the competitor
+                    ad_slot_cost = self.comp_ads_slots[c, d, t, 1]
+                    
+                    # Sum up the bought ad slots for all movies at this time slot
+                    total_slot_bought = sum(bought_ad_slots_solution[i, t, c, d] for i in self.Movies)
+                    total_slot_cost = total_slot_bought * ad_slot_cost
+                    
+                    # Aggregate into total cost and total ads bought
+                    total_bought_cost += total_slot_cost
+                    total_ads_bought += total_slot_bought
+                    
+                    # Distribute cost across movies
+                    for i in self.Movies:
+                        movie_costs[i] += bought_ad_slots_solution[i, t, c, d] * ad_slot_cost
+
+        # Calculate number of movies with non-zero costs
+        non_zero_movies = [cost for cost in movie_costs.values() if cost > 0]
+        num_movie_ad_bought = len(non_zero_movies)
+
+        # Calculate average cost per movie
+        average_cost_per_movie = total_bought_cost / num_movie_ad_bought if num_movie_ad_bought > 0 else 0
+
+        # Calculate average cost per ad bought
+        average_ad_cost = total_bought_cost / total_ads_bought if total_ads_bought > 0 else 0
+        
+        # Retrieve the full solution for sold ad slots and z variables
+        sold_ad_slots_solution = self.scheduling.getSolution(self.sold_ad_slots)  # Multi-dimensional array
+        z_solution = self.scheduling.getSolution(self.z)  # Multi-dimensional array
+
+        # Calculate total revenue with ads
+        total_revenue_with_ads = 0
+        for i in self.Movies:
+            for t in self.TimeSlots:
+                for c in self.Competitors:
+                    for d in self.Days:
+                        # Retrieve precomputed values from solutions
+                        sold_ad_slot_value = sold_ad_slots_solution[i, t, c, d]
+                        z_value = z_solution[i, t, c, d]
+
+                        # Compute revenue from sold ad slots
+                        ad_revenue = sum(
+                            self.based_view_count[f"{demo}_prime_time_view_count"].iloc[t + d * TOTAL_SLOTS] *
+                            self.movie_df[f"{demo}_scaled_popularity"].iloc[i]
+                            for demo in DEMOGRAPHIC_LIST
+                        ) * sold_ad_slot_value * TOTAL_VIEW_COUNT * self.ads_price_per_view
+                        
+                        # Add increased viewers' revenue
+                        increased_viewer_revenue = z_value * TOTAL_VIEW_COUNT * self.ads_price_per_view
+                        
+                        # Sum both components for total revenue with ads
+                        total_revenue_with_ads += ad_revenue + increased_viewer_revenue
+
+        # Calculate average revenue per movie with ads
+        average_revenue_per_movie_with_ads = total_revenue_with_ads / number_of_movies if number_of_movies > 0 else 0
+
+        # Retrieve the full solution for sold ad slots and z variables
+        sold_ad_slots_solution = self.scheduling.getSolution(self.sold_ad_slots)  # Multi-dimensional array
+        z_solution = self.scheduling.getSolution(self.z)  # Multi-dimensional array
+        increased_viewership_solution = self.scheduling.getSolution(self.increased_viewers)  # Multi-dimensional array
+
+        # Initialize variables for viewership calculations
+        total_viewership_without_ads = 0
+        total_viewership_with_ads = 0
+
+        # Calculate viewership with and without ads in a single loop
+        for i in self.Movies:
+            for t in self.TimeSlots:
+                for d in self.Days:
+                    # Base viewership (same for both with and without ads)
+                    base_viewership = sum(
+                        self.based_view_count[f"{demo}_prime_time_view_count"].iloc[t + d * TOTAL_SLOTS] *
+                        self.movie_df[f"{demo}_scaled_popularity"].iloc[i]
+                        for demo in DEMOGRAPHIC_LIST
+                    ) * TOTAL_VIEW_COUNT
+
+                    # Increment total viewership without ads
+                    total_viewership_without_ads += base_viewership
+
+                    # Add increased viewership from ads
+                    increased_viewership = sum(
+                        z_solution[i, t, c, d] for c in self.Competitors
+                    ) * TOTAL_VIEW_COUNT
+
+                    # Increment total viewership with ads
+                    total_viewership_with_ads += base_viewership + increased_viewership
+
+        # Calculate total viewership gains from ads
+        viewership_gains_from_ads = total_viewership_with_ads - total_viewership_without_ads
+
+        # Calculate average viewership per movie (with and without ads)
+        average_viewership_per_movie_without_ads = total_viewership_without_ads / number_of_movies if number_of_movies > 0 else 0
+        average_viewership_per_movie_with_ads = total_viewership_with_ads / number_of_movies if number_of_movies > 0 else 0
+
+        # Add these metrics to general_stats DataFrame
+        general_stats = pd.DataFrame({
+            "week": [self.week],
+            "Total Gross": [self.scheduling.attributes.objval],
+            "ad_price_per_view": [self.ads_price_per_view],
+            "total_licensing_fee": [total_licensing_fee],
+            "total_revenue_no_ads": [total_revenue_no_ads],  # Revenue excluding ad-based revenue
+            "total_revenue_with_ads": [total_revenue_with_ads],  # Revenue including ads
+            "viewership_without_ads": [total_viewership_without_ads],
+            "viewership_with_ads": [total_viewership_with_ads],
+            "viewership_gains_from_ads": [viewership_gains_from_ads],
+            "average_viewership_per_movie_without_ads": [average_viewership_per_movie_without_ads],
+            "average_viewership_per_movie_with_ads": [average_viewership_per_movie_with_ads],
+            "number_of_movies": [number_of_movies],
+            "average_revenue_per_movie_no_ads": [average_revenue_per_movie_no_ads],  # Average revenue per movie without ads
+            "average_revenue_per_movie_with_ads": [average_revenue_per_movie_with_ads],  # Average revenue per movie with ads
+            "total_bought_cost": [total_bought_cost],  # Total cost of ads bought
+            "num_movie_ad_bought": [num_movie_ad_bought],  # Number of movies with at least one ad bought
+            "average_cost_per_movie": [average_cost_per_movie],  # Average cost per movie with ads
+            "number_of_ads_bought": [total_ads_bought],  # Total number of ads bought
+            "average_ad_cost": [average_ad_cost]  # Average cost per ad bought
+        })
+
+        # Save results to CSV files
+        general_stats.to_csv(self.__generate_out_filename('general_stats.csv'), index=False)
+        movie_revenue_df.to_csv(self.__generate_out_filename('movie_revenues.csv'), index=False)
+
         days_labels = ['day_{0}'.format(d) for d in self.Days]
         # Save results for movie
         mdf = pd.DataFrame(data=self.scheduling.getSolution(self.movie), index=self.movie_df['title'],
