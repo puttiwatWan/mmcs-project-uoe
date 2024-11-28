@@ -32,3 +32,5 @@ MAX_SOFT_LIMIT_RUNTIME = 600  # maximum  runtime in seconds
 P = 0.05  # percentage of movies used in the problem in each week
 OUT_FOLDER = "out"  # main folder for storing output files
 OUT_SUBFOLDER = "week_{0}"  # subfolder for storing output files in each iteration
+
+AD_BEFORE_SHOWING_SLOT = 4  # a minimum number of time slots that an ad needs to be before the movie is shown

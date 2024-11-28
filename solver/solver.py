@@ -7,7 +7,8 @@ import xpress as xp
 
 from itertools import chain
 
-from config.config import (COMPETITORS,
+from config.config import (AD_BEFORE_SHOWING_SLOT,
+                           COMPETITORS,
                            DEMOGRAPHIC_LIST,
                            FIRST_WEEK,
                            MAX_CONVERSION_RATE,
@@ -351,7 +352,8 @@ class SchedulingSolver:
             self.TimeSlots)
         # The bought ad slot needs to be before the movie start time at least 4 time slots
         self.scheduling.addConstraint(self.start_time[i, d] + (d * self.number_of_time_slots) >=
-                                      self.bought_ad_slots[i, t, c, d] * (t + (d * self.number_of_time_slots) + 4)
+                                      self.bought_ad_slots[i, t, c, d] * (t + (d * self.number_of_time_slots) +
+                                                                          AD_BEFORE_SHOWING_SLOT)
                                       for i in self.Movies for c in self.Competitors for d in self.Days for t in
                                       self.TimeSlots)
         # Calculate the gained viewers from buying an ad.
