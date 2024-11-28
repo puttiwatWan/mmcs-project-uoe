@@ -194,9 +194,10 @@ def calculate_ad_slot_price(schedule_df: pd.DataFrame, base_fee: float,
     return np.round(ad_slot_cost, 2)
 
 
-def vectorize_cosine_sim(A: np.array, B: np.array) -> np.array:
+def vectorise_cosine_sim(A: np.array, B: np.array) -> np.array:
     """
     Create every cosine similarity between row ith of A matrix and row jth of B matrix.
+    It is intended to be a vectorised version of sklearn.metrics.pairwise.cosine_similarity.
     <br><br>
 
     For each row, rA and rB, of A and B, the value is calculated using the formula
@@ -217,7 +218,8 @@ def vectorize_cosine_sim(A: np.array, B: np.array) -> np.array:
 def generate_conversion_rates(schedule_df: pd.DataFrame, movie_df: pd.DataFrame, original_movie_df: pd.DataFrame,
                               all_movie_genres: list[str], max_conversion_rate: float) -> np.array:
     """
-    Calculate all conversion rates for all combinations of movies and each
+    This function is a vectorised version of the function calculate_conversion_rate(...) above.
+    It calculates all conversion rates for all combinations of movies and each
     ad slot for a given schedule. This takes into account the audience's tastes,
     i.e. how many genres are overlapped between the movies being advertised the
     movies currently being shown. If the ad slot is at the end of a movie, the
@@ -267,8 +269,8 @@ def generate_conversion_rates(schedule_df: pd.DataFrame, movie_df: pd.DataFrame,
     )
 
     # Create similarity between ads' movie and all movies
-    prev_genres_score = vectorize_cosine_sim(prev_genres_vector, movie_genres_vector)
-    next_genres_score = vectorize_cosine_sim(next_genres_vector, movie_genres_vector)
+    prev_genres_score = vectorise_cosine_sim(prev_genres_vector, movie_genres_vector)
+    next_genres_score = vectorise_cosine_sim(next_genres_vector, movie_genres_vector)
     
     genres_score = (prev_genres_score + next_genres_score) / 2
 
