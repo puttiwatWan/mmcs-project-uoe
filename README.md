@@ -39,11 +39,11 @@ conda env create -f environment.yaml
 # Run
 To run the solver, depending on the method used, follow the steps below.
 ### Command Line
-Run the following command
+Run the following command.
 ```
 python -m main
 ```
 ### Editor
-Simply run the `main.py` file on the editor
+Simply run the `main.py` file on the editor.
 
 -----
