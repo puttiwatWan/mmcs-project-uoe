@@ -19,7 +19,7 @@ The project mainly uses python as the main language together with xpress as a so
 - `advert_conversion_rates.py` - functions for calculating the conversion rates.
 - `data_processing.py` - functions for preprocessing data into desired dataframe before feeding into the model.
 - `schedule_processing.py` - functions for preprocessing schedules data of each competitor.
-- `utils.py` - general utility functions like printing or crating folder.
+- `utils.py` - general utility functions such as printing and creating folder.
 ### `data_exploration/*` 
 - python notebook files used for playing with the data.
 
