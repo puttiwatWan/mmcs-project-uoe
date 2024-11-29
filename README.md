@@ -38,6 +38,10 @@ conda env create -f environment.yaml
 -----
 # Run
 To run the solver, depending on the method used, follow the steps below.
+By default, the solver soft time limit is set to 10 minutes 
+and the movie data sent to the solver is picked from the top 5%.
+
+The total runtime should take around 10 minutes for each week for a total of 12 weeks.
 ### Command Line
 Run the following command.
 ```
